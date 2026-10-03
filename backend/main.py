@@ -1,12 +1,21 @@
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from database import get_db
+from documents import MAX_UPLOAD_BYTES, DocumentError, clean_text, extract_text
 from llm import parse_search_query
-from models import Competency, Provider, ProviderCompetency, ProviderType
+from models import (
+    Competency,
+    Document,
+    DocumentSource,
+    Provider,
+    ProviderCompetency,
+    ProviderType,
+)
 from schemas import (
     CompetencyOut,
+    DocumentOut,
     ProviderCreate,
     ProviderOut,
     SearchRequest,
@@ -111,3 +120,50 @@ def get_provider(provider_id: int, db: Session = Depends(get_db)):
     if provider is None:
         raise HTTPException(status_code=404, detail="Provider not found")
     return provider
+
+
+@app.post(
+    "/providers/{provider_id}/documents", response_model=DocumentOut, status_code=201
+)
+def upload_document(
+    provider_id: int,
+    file: UploadFile | None = File(default=None, description=".txt or text-based .pdf"),
+    text: str | None = Form(default=None, description="Pasted document text"),
+    title: str | None = Form(default=None, max_length=255),
+    db: Session = Depends(get_db),
+):
+    """Attach a document (e.g. a certificate) to a provider. Send a file OR text."""
+    if db.get(Provider, provider_id) is None:
+        raise HTTPException(status_code=404, detail="Provider not found")
+    if (file is None) == (not text):
+        raise HTTPException(status_code=400, detail="Send exactly one of: a file, or pasted text.")
+
+    try:
+        if file is not None:
+            data = file.file.read(MAX_UPLOAD_BYTES + 1)
+            raw_text, source = extract_text(data, file.filename or "")
+        else:
+            raw_text, source = clean_text(text), DocumentSource.pasted
+    except DocumentError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    filename = file.filename if file is not None else None
+    document = Document(
+        provider_id=provider_id,
+        title=title or filename,
+        source_type=source,
+        filename=filename,
+        raw_text=raw_text,
+    )
+    db.add(document)
+    db.commit()
+    db.refresh(document)
+    return document
+
+
+@app.get("/providers/{provider_id}/documents", response_model=list[DocumentOut])
+def list_documents(provider_id: int, db: Session = Depends(get_db)):
+    provider = db.get(Provider, provider_id)
+    if provider is None:
+        raise HTTPException(status_code=404, detail="Provider not found")
+    return provider.documents

@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from models import ProviderType
+from models import DocumentSource, ProviderType
 
 
 class CompetencyOut(BaseModel):
@@ -38,6 +38,18 @@ class ProviderOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     competencies: list[CompetencyOut]
+
+
+class DocumentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    provider_id: int
+    title: str | None
+    source_type: DocumentSource
+    filename: str | None
+    raw_text: str
+    created_at: datetime
 
 
 class SearchRequest(BaseModel):
