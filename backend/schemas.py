@@ -38,3 +38,24 @@ class ProviderOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     competencies: list[CompetencyOut]
+
+
+class SearchRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=500)
+
+
+class SearchFilter(BaseModel):
+    """What the LLM extracts from a search query."""
+
+    provider_type: ProviderType | None = None
+    required_competencies: list[str] = Field(default_factory=list)
+    location: str | None = None
+
+
+class SearchResponse(BaseModel):
+    query: str
+    filter: SearchFilter
+    filter_parsed: bool = Field(
+        description="False if the LLM call failed and an empty filter was used"
+    )
+    results: list[ProviderOut]
