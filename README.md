@@ -83,6 +83,81 @@ Users request a named provider for a specific pickup, dropoff, and time. Vouch c
 - **Distance/ETA:** a single external geocoding/distance API call (e.g. Google Distance Matrix or Mapbox) for trip ETA and distance display — Vouch does not build its own routing engine; that's a solved problem elsewhere and isn't the point of this project
 - **Optional:** basic OCR (e.g. Tesseract) if parsing certificate images rather than text uploads
 
+## Running locally
+
+### Prerequisites
+
+- Python 3.11+
+- Node.js 18+
+- PostgreSQL 15+
+
+### Backend setup (once)
+
+From the repo root:
+
+```bash
+cd backend
+python -m venv venv
+venv\Scripts\activate          # macOS/Linux: source venv/bin/activate
+pip install -r requirements.txt
+```
+
+Create the database:
+
+```bash
+createdb -U postgres vouch_dev
+```
+
+Create `backend/.env` (it is gitignored, so never committed):
+
+```
+DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@localhost/vouch_dev
+GEMINI_API_KEY=your-key-from-aistudio.google.com
+```
+
+Search uses Gemini's free tier. Get a key from Google AI Studio (no billing needed).
+
+Create the tables and add sample data:
+
+```bash
+alembic upgrade head
+python seed.py
+```
+
+`python seed.py --reset` deletes all providers and re-adds the sample set.
+
+### Run the backend
+
+From `backend/`, with the virtual environment active:
+
+```bash
+uvicorn main:app --reload
+```
+
+The API runs at http://127.0.0.1:8000. Interactive API docs are at http://127.0.0.1:8000/docs.
+
+If PowerShell refuses to run `activate` ("running scripts is disabled"), run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once, or skip activating and use `venv\Scripts\python -m uvicorn main:app --reload`.
+
+### Run the frontend
+
+From the repo root:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The app runs at http://localhost:5173.
+
+### After pulling new changes
+
+```bash
+pip install -r requirements.txt    # in backend/, if requirements changed
+alembic upgrade head               # in backend/, if there are new migrations
+npm install                        # in frontend/, if package.json changed
+```
+
 ## Design principle: LLM interprets, system decides
 
 The same discipline runs through every part of Vouch. The LLM is used only where natural language genuinely needs interpreting — turning a user's request or a provider's bio into structured data. Every decision that actually matters — verification status, confidence score, ranking, matching — is computed by deterministic application code that can be inspected, tested, and explained. This is a deliberate architectural choice, not an accident of scope: it's what makes "verified" mean something rather than being a label the LLM hands out.
