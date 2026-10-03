@@ -39,6 +39,10 @@ class Provider(Base):
         passive_deletes=True,
     )
 
+    @property
+    def competencies(self) -> list["Competency"]:
+        return [link.competency for link in self.competency_links]
+
 
 class Competency(Base):
     __tablename__ = "competencies"
