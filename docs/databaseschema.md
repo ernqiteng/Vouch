@@ -1,6 +1,6 @@
 # Database Schema
 
-The Postgres schema for Vouch. This file covers the Phase 1 tables; update it whenever a migration changes the schema.
+The Postgres schema for Vouch. Update this file whenever a migration changes the schema.
 
 ---
 
@@ -10,6 +10,7 @@ The Postgres schema for Vouch. This file covers the Phase 1 tables; update it wh
 erDiagram
     providers ||--o{ provider_competencies : has
     competencies ||--o{ provider_competencies : "held by"
+    providers ||--o{ documents : uploads
 
     providers {
         int id PK
@@ -31,11 +32,21 @@ erDiagram
         int provider_id PK, FK
         int competency_id PK, FK
     }
+    documents {
+        int id PK
+        int provider_id FK
+        string title
+        document_source source_type
+        string filename
+        text raw_text
+        timestamp created_at
+    }
 ```
 
 - **providers**: the person offering the service.
 - **competencies**: the fixed list of skills a provider can have.
 - **provider_competencies**: links providers to competencies (a many-to-many relationship).
+- **documents**: evidence a provider uploads, such as a certificate (Phase 2).
 
 ---
 
@@ -96,13 +107,33 @@ Which provider has which competency. One row per pair.
 
 ---
 
+## `documents`
+
+Evidence a provider uploads, such as a certificate. Only the extracted text is stored, not the original file.
+
+| Column | Type | Constraints | Notes |
+|---|---|---|---|
+| `id` | integer | primary key, auto-increment | |
+| `provider_id` | integer | not null, foreign key → `providers.id`, on delete cascade | |
+| `title` | varchar(255) | nullable | e.g. `First aid certificate`. Defaults to the filename for uploads. |
+| `source_type` | enum `document_source` (`pasted`, `text_file`, `pdf`) | not null | How the text was obtained. Lets the confidence score weight sources differently. |
+| `filename` | varchar(255) | nullable | Original filename. Null for pasted text. |
+| `raw_text` | text | not null | Cleaned text: whitespace normalised, up to 100,000 characters. |
+| `created_at` | timestamptz | not null, default `now()` | |
+
+**Indexes:** `provider_id`.
+
+**On delete:** deleting a provider removes their documents.
+
+---
+
 ## Planned changes in later phases
 
 Not built yet. Listed so Phase 1 doesn't make choices that block them.
 
 | Phase | Change |
 |---|---|
-| 2 | Add `status` (`corroborated` / `self_reported` / `documented_only`) and `confidence` to `provider_competencies`. Add a `documents` table linked to `providers`. |
+| 2 | Add `status` (`corroborated` / `self_reported` / `documented_only`) and `confidence` to `provider_competencies`. (`documents` table: done.) |
 | 3 | Add `users` and `user_profiles` tables. Distance scoring uses `providers.latitude` / `longitude`. |
 | 4 | Add `availability` and `bookings` tables. Bookings store a JSON snapshot of verification data, not just a foreign key. |
 | 5 | Add login fields (e.g. `email`, `password_hash`) to `providers`. |
