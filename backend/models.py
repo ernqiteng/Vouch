@@ -39,6 +39,13 @@ class Provider(Base):
         passive_deletes=True,
     )
 
+    documents: Mapped[list["Document"]] = relationship(
+        back_populates="provider",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="Document.created_at",
+    )
+
     @property
     def competencies(self) -> list["Competency"]:
         return [link.competency for link in self.competency_links]
@@ -72,3 +79,33 @@ class ProviderCompetency(Base):
 
     provider: Mapped[Provider] = relationship(back_populates="competency_links")
     competency: Mapped[Competency] = relationship(back_populates="provider_links")
+
+
+class DocumentSource(str, enum.Enum):
+    """How the document's text was obtained. Phase 2.4 can weight these differently."""
+
+    pasted = "pasted"
+    text_file = "text_file"
+    pdf = "pdf"
+
+
+class Document(Base):
+    """Evidence a provider uploads, e.g. a certificate. Only the text is stored."""
+
+    __tablename__ = "documents"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    provider_id: Mapped[int] = mapped_column(
+        ForeignKey("providers.id", ondelete="CASCADE"), index=True
+    )
+    title: Mapped[str | None] = mapped_column(String(255))
+    source_type: Mapped[DocumentSource] = mapped_column(
+        Enum(DocumentSource, name="document_source")
+    )
+    filename: Mapped[str | None] = mapped_column(String(255))
+    raw_text: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    provider: Mapped[Provider] = relationship(back_populates="documents")
