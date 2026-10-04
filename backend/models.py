@@ -81,6 +81,14 @@ class ProviderCompetency(Base):
     competency: Mapped[Competency] = relationship(back_populates="provider_links")
 
 
+class VerificationStatus(str, enum.Enum):
+    """Result of cross-checking a competency's bio claim against documents."""
+
+    corroborated = "corroborated"  # claimed in the bio AND shown in a document
+    self_reported = "self_reported"  # claimed in the bio only
+    documented_only = "documented_only"  # in a document, but not claimed in the bio
+
+
 class DocumentSource(str, enum.Enum):
     """How the document's text was obtained. Phase 2.4 can weight these differently."""
 

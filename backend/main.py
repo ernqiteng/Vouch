@@ -22,6 +22,7 @@ from schemas import (
     SearchRequest,
     SearchResponse,
 )
+from verification import cross_check
 
 app = FastAPI()
 
@@ -164,7 +165,10 @@ def upload_document(
 
 @app.post("/providers/{provider_id}/extract-claims", response_model=ClaimsResponse)
 def extract_provider_claims(provider_id: int, db: Session = Depends(get_db)):
-    """Run LLM claim extraction on a provider's bio and documents. Stores nothing."""
+    """Extract claims from a provider's bio and documents, then cross-check them.
+
+    Stores nothing. Useful for seeing what verification would conclude.
+    """
     provider = db.get(Provider, provider_id)
     if provider is None:
         raise HTTPException(status_code=404, detail="Provider not found")
@@ -175,6 +179,7 @@ def extract_provider_claims(provider_id: int, db: Session = Depends(get_db)):
     return ClaimsResponse(
         provider_id=provider_id,
         claims=claims,
+        checks=cross_check(claims),
         extraction_ok=ok,
         documents_used=len(provider.documents),
     )

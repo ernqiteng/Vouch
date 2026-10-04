@@ -3,7 +3,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from models import DocumentSource, ProviderType
+from models import DocumentSource, ProviderType, VerificationStatus
 
 
 class CompetencyOut(BaseModel):
@@ -72,9 +72,19 @@ class ClaimList(BaseModel):
     claims: list[Claim] = Field(default_factory=list)
 
 
+class CompetencyCheck(BaseModel):
+    """Cross-check result for one competency, with the evidence behind it."""
+
+    competency: str
+    status: VerificationStatus
+    bio_snippet: str | None = None
+    document_snippet: str | None = None
+
+
 class ClaimsResponse(BaseModel):
     provider_id: int
     claims: list[Claim]
+    checks: list[CompetencyCheck]
     extraction_ok: bool = Field(
         description="False if the LLM call failed and no claims could be extracted"
     )
