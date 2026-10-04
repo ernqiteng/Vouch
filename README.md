@@ -160,6 +160,14 @@ pip install -r requirements-dev.txt   # once, adds pytest
 pytest
 ```
 
+To measure claim extraction accuracy against the hand-labelled eval set in `backend/evals/claims_eval.json` (one Gemini call per case, about 4 minutes):
+
+```bash
+python -m evals.run_claims_eval
+```
+
+It prints precision, recall, latency and token usage, and saves the full results to `backend/evals/results/`.
+
 ### After pulling new changes
 
 ```bash
