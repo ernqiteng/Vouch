@@ -2,11 +2,14 @@ import ast
 import random
 from pathlib import Path
 
-from models import VerificationStatus
+import pytest
+
+from models import DocumentSource, VerificationStatus
 from schemas import Claim, ClaimSource
-from verification import cross_check
+from verification import cross_check, score
 
 BIO, DOC = ClaimSource.bio, ClaimSource.document
+PASTED, PDF = DocumentSource.pasted, DocumentSource.pdf
 
 
 def claim(code, source, snippet="evidence"):
@@ -84,6 +87,58 @@ def test_output_is_sorted_and_independent_of_input_order():
         shuffled = claims[:]
         random.Random(seed).shuffle(shuffled)
         assert statuses(cross_check(shuffled)) == statuses(expected)
+
+
+def checks_for(corroborated=0, self_reported=0, documented_only=0):
+    claims = []
+    for i in range(corroborated):
+        claims += [claim(f"c{i}", BIO), claim(f"c{i}", DOC)]
+    claims += [claim(f"s{i}", BIO) for i in range(self_reported)]
+    claims += [claim(f"d{i}", DOC) for i in range(documented_only)]
+    return cross_check(claims)
+
+
+def test_score_is_corroborated_over_claimed():
+    result = score(checks_for(corroborated=2, self_reported=1), [PDF])
+    assert result.confidence == pytest.approx(0.6667)
+    assert result.corroborated_count == 2
+    assert result.self_reported_count == 1
+    assert result.total_claimed_count == 3
+    assert result.document_quality_weight == 1.0
+
+
+def test_everything_corroborated_scores_one():
+    assert score(checks_for(corroborated=3), [PASTED]).confidence == 1.0
+
+
+def test_documented_only_competencies_dont_change_the_score():
+    without = score(checks_for(corroborated=1, self_reported=1), [PDF])
+    with_extra = score(checks_for(corroborated=1, self_reported=1, documented_only=4), [PDF])
+    assert with_extra.confidence == without.confidence == 0.5
+    assert with_extra.documented_only_count == 4
+
+
+def test_no_documents_scores_zero():
+    result = score(checks_for(self_reported=3), [])
+    assert result.confidence == 0.0
+    assert result.document_quality_weight == 0.0
+
+
+def test_nothing_claimed_scores_zero_without_dividing_by_zero():
+    result = score(checks_for(documented_only=2), [PDF])
+    assert result.confidence == 0.0
+    assert result.total_claimed_count == 0
+
+
+def test_document_quality_weight_scales_the_score(monkeypatch):
+    import verification
+
+    monkeypatch.setitem(verification.DOCUMENT_QUALITY_WEIGHTS, PASTED, 0.8)
+    result = score(checks_for(corroborated=1, self_reported=1), [PASTED])
+    assert result.document_quality_weight == 0.8
+    assert result.confidence == pytest.approx(0.4)
+    # With several documents, the most trustworthy one sets the weight.
+    assert score(checks_for(corroborated=1), [PASTED, PDF]).document_quality_weight == 1.0
 
 
 def test_verification_module_never_imports_the_llm():
