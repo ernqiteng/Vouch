@@ -159,3 +159,58 @@ class Verification(Base):
     )
 
     provider: Mapped[Provider] = relationship(back_populates="verifications")
+
+
+class User(Base):
+    """Someone searching for a carer or driver. Passwords are stored hashed only."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True)  # stored lowercased
+    password_hash: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    profile: Mapped["UserProfile | None"] = relationship(
+        back_populates="user", cascade="all, delete-orphan", passive_deletes=True
+    )
+
+
+class MobilityDevice(str, enum.Enum):
+    none = "none"
+    manual_wheelchair = "manual_wheelchair"
+    powered_wheelchair = "powered_wheelchair"
+    mobility_scooter = "mobility_scooter"
+    walking_aid = "walking_aid"
+    other = "other"
+
+
+class CommunicationNeed(str, enum.Enum):
+    bsl = "bsl"  # British Sign Language
+    lip_reading = "lip_reading"
+    written = "written"  # prefers written messages to calls
+    easy_read = "easy_read"
+    extra_time = "extra_time"  # needs time to process or respond
+
+
+class UserProfile(Base):
+    """A user's saved accessibility needs, applied to their searches (Phase 3.2)."""
+
+    __tablename__ = "user_profiles"
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    mobility_device: Mapped[MobilityDevice | None] = mapped_column(
+        Enum(MobilityDevice, name="mobility_device")
+    )
+    communication_needs: Mapped[list[str]] = mapped_column(JSONB, default=list)
+    required_competencies: Mapped[list[str]] = mapped_column(JSONB, default=list)
+    location: Mapped[str | None] = mapped_column(String(255))  # home city or postcode
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    user: Mapped[User] = relationship(back_populates="profile")
