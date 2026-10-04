@@ -11,6 +11,7 @@ erDiagram
     providers ||--o{ provider_competencies : has
     competencies ||--o{ provider_competencies : "held by"
     providers ||--o{ documents : uploads
+    providers ||--o{ verifications : "verified by"
 
     providers {
         int id PK
@@ -41,12 +42,27 @@ erDiagram
         text raw_text
         timestamp created_at
     }
+    verifications {
+        int id PK
+        int provider_id FK
+        float confidence
+        int corroborated_count
+        int self_reported_count
+        int documented_only_count
+        int total_claimed_count
+        float document_quality_weight
+        jsonb document_ids
+        jsonb claims
+        jsonb checks
+        timestamp created_at
+    }
 ```
 
 - **providers**: the person offering the service.
 - **competencies**: the fixed list of skills a provider can have.
 - **provider_competencies**: links providers to competencies (a many-to-many relationship).
 - **documents**: evidence a provider uploads, such as a certificate (Phase 2).
+- **verifications**: each verification run's confidence score and the inputs behind it (Phase 2).
 
 ---
 
@@ -127,13 +143,40 @@ Evidence a provider uploads, such as a certificate. Only the extracted text is s
 
 ---
 
+## `verifications`
+
+One row per verification run. Rows are never updated, so a provider's history is kept; the newest row is their current status. Stores the score *and* every input used to calculate it, so any score can be explained later.
+
+`confidence = corroborated_count / total_claimed_count * document_quality_weight` (0 when nothing is claimed).
+
+| Column | Type | Constraints | Notes |
+|---|---|---|---|
+| `id` | integer | primary key, auto-increment | Higher id = more recent run. |
+| `provider_id` | integer | not null, foreign key → `providers.id`, on delete cascade | |
+| `confidence` | double precision | not null | 0 to 1, rounded to 4 decimal places. |
+| `corroborated_count` | integer | not null | Competencies in the bio and a document. |
+| `self_reported_count` | integer | not null | Competencies in the bio only. |
+| `documented_only_count` | integer | not null | In a document but not the bio. Doesn't affect the score. |
+| `total_claimed_count` | integer | not null | `corroborated_count + self_reported_count`. |
+| `document_quality_weight` | double precision | not null | Weight of the most trustworthy document; 0 with no documents. |
+| `document_ids` | jsonb | not null | Ids of the documents used, e.g. `[4, 5]`. |
+| `claims` | jsonb | not null | The claims extracted by the LLM: `{competency, source, snippet}`. |
+| `checks` | jsonb | not null | Per-competency cross-check results: `{competency, status, bio_snippet, document_snippet}`. |
+| `created_at` | timestamptz | not null, default `now()` | |
+
+**Indexes:** `provider_id`.
+
+**On delete:** deleting a provider removes their verifications.
+
+---
+
 ## Planned changes in later phases
 
 Not built yet. Listed so Phase 1 doesn't make choices that block them.
 
 | Phase | Change |
 |---|---|
-| 2 | Add `status` (`corroborated` / `self_reported` / `documented_only`) and `confidence` to `provider_competencies`. (`documents` table: done.) |
+| 2 | Done: `documents` and `verifications` tables. Per-competency status lives in `verifications.checks` rather than on `provider_competencies`, so it's kept per run. |
 | 3 | Add `users` and `user_profiles` tables. Distance scoring uses `providers.latitude` / `longitude`. |
 | 4 | Add `availability` and `bookings` tables. Bookings store a JSON snapshot of verification data, not just a foreign key. |
 | 5 | Add login fields (e.g. `email`, `password_hash`) to `providers`. |
