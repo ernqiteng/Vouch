@@ -116,6 +116,10 @@ class VerificationOut(ConfidenceScore):
     document_ids: list[int]
     claims: list[Claim]
     checks: list[CompetencyCheck]
+    llm_model: str | None
+    llm_latency_ms: int | None
+    llm_prompt_tokens: int | None
+    llm_output_tokens: int | None
     created_at: datetime
 
 

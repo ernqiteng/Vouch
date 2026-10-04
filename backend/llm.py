@@ -7,6 +7,8 @@ backend validates its output and makes every decision.
 """
 import logging
 import os
+import time
+from dataclasses import dataclass
 from functools import cache
 from typing import TypeVar
 
@@ -83,8 +85,21 @@ def _client() -> genai.Client:
     )
 
 
-def _generate(system: str, contents: str, schema: type[T], what: str) -> T | None:
-    """Ask the LLM for JSON matching `schema`. Returns None if every model fails."""
+@dataclass
+class CallStats:
+    """What one LLM request cost. Tokens are from the attempt that succeeded."""
+
+    model: str | None = None  # the model that answered; None if every model failed
+    latency_ms: int = 0  # total wall time, including failed attempts on other models
+    attempts: int = 0  # models tried
+    prompt_tokens: int | None = None
+    output_tokens: int | None = None
+
+
+def _generate(
+    system: str, contents: str, schema: type[T], what: str
+) -> tuple[T | None, CallStats]:
+    """Ask the LLM for JSON matching `schema`. The result is None if every model fails."""
     config = types.GenerateContentConfig(
         system_instruction=system,
         response_mime_type="application/json",
@@ -93,16 +108,30 @@ def _generate(system: str, contents: str, schema: type[T], what: str) -> T | Non
         thinking_config=types.ThinkingConfig(thinking_budget=0),
         automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
     )
+    stats = CallStats()
+    start = time.perf_counter()
+    result = None
     for model in MODELS:
+        stats.attempts += 1
         try:
             response = _client().models.generate_content(
                 model=model.strip(), contents=contents, config=config
             )
-            return schema.model_validate_json(response.text or "")
+            result = schema.model_validate_json(response.text or "")
         except Exception as e:
             logger.warning("LLM %s failed on %s: %s", what, model, e)
-    logger.error("All LLM models failed for %s", what)
-    return None
+            continue
+        stats.model = model.strip()
+        usage = response.usage_metadata
+        if usage:
+            stats.prompt_tokens = usage.prompt_token_count
+            stats.output_tokens = usage.candidates_token_count
+        break
+    stats.latency_ms = round((time.perf_counter() - start) * 1000)
+    if result is None:
+        logger.error("All LLM models failed for %s", what)
+    logger.info("LLM %s: %s", what, stats)
+    return result, stats
 
 
 def _listing(competencies: dict[str, str]) -> str:
@@ -116,7 +145,7 @@ def parse_search_query(
 
     `competencies` maps each valid code to its label.
     """
-    search_filter = _generate(
+    search_filter, _ = _generate(
         SEARCH_PROMPT.format(competencies=_listing(competencies)),
         query,
         SearchFilter,
@@ -140,24 +169,24 @@ def _normalise(text: str) -> str:
 
 def extract_claims(
     bio: str, document_text: str, competencies: dict[str, str]
-) -> tuple[list[Claim], bool]:
-    """Return (claims, ok). On any LLM failure, returns no claims and ok=False.
+) -> tuple[list[Claim], bool, CallStats]:
+    """Return (claims, ok, stats). On any LLM failure, returns no claims and ok=False.
 
     Every returned claim uses a known competency code and quotes a snippet that
     really appears in the text it's attributed to; anything else is dropped.
     """
     bio, document_text = bio.strip(), document_text.strip()
     if not bio and not document_text:
-        return [], True
+        return [], True, CallStats()
 
-    result = _generate(
+    result, stats = _generate(
         CLAIMS_PROMPT.format(competencies=_listing(competencies)),
         f"BIO:\n{bio or '(empty)'}\n\nDOCUMENT:\n{document_text or '(empty)'}",
         ClaimList,
         "claim extraction",
     )
     if result is None:
-        return [], False
+        return [], False, stats
 
     sources = {
         ClaimSource.bio: _normalise(bio),
@@ -174,4 +203,4 @@ def extract_claims(
             )
         else:
             claims.setdefault((claim.competency, claim.source), claim)
-    return list(claims.values()), True
+    return list(claims.values()), True, stats

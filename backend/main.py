@@ -211,7 +211,7 @@ def extract_provider_claims(provider_id: int, db: Session = Depends(get_db)):
     Stores nothing. Useful for seeing what verification would conclude.
     """
     provider = _provider_or_404(provider_id, db)
-    claims, ok = extract(db, provider)
+    claims, ok, _ = extract(db, provider)
     return ClaimsResponse(
         provider_id=provider_id,
         claims=claims,

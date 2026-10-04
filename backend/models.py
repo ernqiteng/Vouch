@@ -148,6 +148,12 @@ class Verification(Base):
     document_ids: Mapped[list[int]] = mapped_column(JSONB)
     claims: Mapped[list[dict]] = mapped_column(JSONB)
     checks: Mapped[list[dict]] = mapped_column(JSONB)
+    # LLM cost of the extraction step, for latency and cost-per-verification
+    # numbers. Null on rows created before these were recorded.
+    llm_model: Mapped[str | None] = mapped_column(String(64))
+    llm_latency_ms: Mapped[int | None]
+    llm_prompt_tokens: Mapped[int | None]
+    llm_output_tokens: Mapped[int | None]
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
