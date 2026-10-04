@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from database import get_db
 from documents import MAX_UPLOAD_BYTES, DocumentError, clean_text, extract_text
-from llm import extract_claims, parse_search_query
+from llm import parse_search_query
 from models import (
     Competency,
     Document,
@@ -12,27 +12,63 @@ from models import (
     Provider,
     ProviderCompetency,
     ProviderType,
-    Verification,
 )
+from pipeline import extract, run_verification
 from schemas import (
-    Claim,
     ClaimsResponse,
+    CompetencyCheck,
     CompetencyOut,
     DocumentOut,
+    ProviderCompetencyOut,
     ProviderCreate,
     ProviderOut,
     SearchRequest,
     SearchResponse,
     VerificationOut,
+    VerificationSummary,
 )
-from verification import cross_check, score
+from verification import cross_check, document_backed_competencies, is_verified
 
 app = FastAPI()
 
-# Load each provider's competencies in one extra query instead of one per provider.
-WITH_COMPETENCIES = selectinload(Provider.competency_links).selectinload(
-    ProviderCompetency.competency
+# Load related rows in one extra query each, instead of one query per provider.
+PROVIDER_DETAILS = (
+    selectinload(Provider.competency_links).selectinload(ProviderCompetency.competency),
+    selectinload(Provider.verifications),
 )
+
+
+def to_provider_out(provider: Provider) -> ProviderOut:
+    """A provider with their latest verification applied to their competencies."""
+    latest = provider.verifications[-1] if provider.verifications else None
+    backed = (
+        document_backed_competencies([CompetencyCheck(**c) for c in latest.checks])
+        if latest
+        else set()
+    )
+    return ProviderOut(
+        id=provider.id,
+        name=provider.name,
+        provider_type=provider.provider_type,
+        bio=provider.bio,
+        location=provider.location,
+        latitude=provider.latitude,
+        longitude=provider.longitude,
+        created_at=provider.created_at,
+        updated_at=provider.updated_at,
+        competencies=[
+            ProviderCompetencyOut(code=c.code, label=c.label, verified=c.code in backed)
+            for c in provider.competencies
+        ],
+        verification=VerificationSummary(
+            verification_id=latest.id,
+            confidence=latest.confidence,
+            verified=is_verified(latest.confidence),
+            verified_at=latest.created_at,
+        )
+        if latest
+        else None,
+    )
 
 
 @app.get("/health")
@@ -72,9 +108,9 @@ def find_providers(
     provider_type: ProviderType | None = None,
     competencies: list[str] = (),
     location: str | None = None,
-) -> list[Provider]:
+) -> list[ProviderOut]:
     """Providers matching every filter given. Used by both listing and search."""
-    query = select(Provider).options(WITH_COMPETENCIES).order_by(Provider.id)
+    query = select(Provider).options(*PROVIDER_DETAILS).order_by(Provider.id)
     if provider_type:
         query = query.where(Provider.provider_type == provider_type)
     for code in competencies:
@@ -85,7 +121,7 @@ def find_providers(
         )
     if location:
         query = query.where(Provider.location.icontains(location.strip()))
-    return list(db.scalars(query).all())
+    return [to_provider_out(p) for p in db.scalars(query)]
 
 
 @app.get("/providers", response_model=list[ProviderOut])
@@ -118,13 +154,11 @@ def search(body: SearchRequest, db: Session = Depends(get_db)):
 @app.get("/providers/{provider_id}", response_model=ProviderOut)
 def get_provider(provider_id: int, db: Session = Depends(get_db)):
     provider = db.scalar(
-        select(Provider)
-        .options(WITH_COMPETENCIES)
-        .where(Provider.id == provider_id)
+        select(Provider).options(*PROVIDER_DETAILS).where(Provider.id == provider_id)
     )
     if provider is None:
         raise HTTPException(status_code=404, detail="Provider not found")
-    return provider
+    return to_provider_out(provider)
 
 
 @app.post(
@@ -138,8 +172,7 @@ def upload_document(
     db: Session = Depends(get_db),
 ):
     """Attach a document (e.g. a certificate) to a provider. Send a file OR text."""
-    if db.get(Provider, provider_id) is None:
-        raise HTTPException(status_code=404, detail="Provider not found")
+    _provider_or_404(provider_id, db)
     if (file is None) == (not text):
         raise HTTPException(status_code=400, detail="Send exactly one of: a file, or pasted text.")
 
@@ -166,6 +199,11 @@ def upload_document(
     return document
 
 
+@app.get("/providers/{provider_id}/documents", response_model=list[DocumentOut])
+def list_documents(provider_id: int, db: Session = Depends(get_db)):
+    return _provider_or_404(provider_id, db).documents
+
+
 @app.post("/providers/{provider_id}/extract-claims", response_model=ClaimsResponse)
 def extract_provider_claims(provider_id: int, db: Session = Depends(get_db)):
     """Extract claims from a provider's bio and documents, then cross-check them.
@@ -173,7 +211,7 @@ def extract_provider_claims(provider_id: int, db: Session = Depends(get_db)):
     Stores nothing. Useful for seeing what verification would conclude.
     """
     provider = _provider_or_404(provider_id, db)
-    claims, ok = _extract(provider, db)
+    claims, ok = extract(db, provider)
     return ClaimsResponse(
         provider_id=provider_id,
         claims=claims,
@@ -193,26 +231,12 @@ def verify_provider(provider_id: int, db: Session = Depends(get_db)):
     If extraction fails nothing is stored, so a good score is never replaced by
     an empty one.
     """
-    provider = _provider_or_404(provider_id, db)
-    claims, ok = _extract(provider, db)
-    if not ok:
+    verification = run_verification(db, _provider_or_404(provider_id, db))
+    if verification is None:
         raise HTTPException(
             status_code=503,
             detail="Claim extraction is unavailable right now. Please try again shortly.",
         )
-
-    checks = cross_check(claims)
-    result = score(checks, [d.source_type for d in provider.documents])
-    verification = Verification(
-        provider_id=provider_id,
-        **result.model_dump(),
-        document_ids=[d.id for d in provider.documents],
-        claims=[c.model_dump(mode="json") for c in claims],
-        checks=[c.model_dump(mode="json") for c in checks],
-    )
-    db.add(verification)
-    db.commit()
-    db.refresh(verification)
     return verification
 
 
@@ -227,17 +251,3 @@ def _provider_or_404(provider_id: int, db: Session) -> Provider:
     if provider is None:
         raise HTTPException(status_code=404, detail="Provider not found")
     return provider
-
-
-def _extract(provider: Provider, db: Session) -> tuple[list[Claim], bool]:
-    competencies = {c.code: c.label for c in db.scalars(select(Competency))}
-    document_text = "\n\n".join(d.raw_text for d in provider.documents)
-    return extract_claims(provider.bio or "", document_text, competencies)
-
-
-@app.get("/providers/{provider_id}/documents", response_model=list[DocumentOut])
-def list_documents(provider_id: int, db: Session = Depends(get_db)):
-    provider = db.get(Provider, provider_id)
-    if provider is None:
-        raise HTTPException(status_code=404, detail="Provider not found")
-    return provider.documents

@@ -26,9 +26,22 @@ class ProviderCreate(BaseModel):
     )
 
 
-class ProviderOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+class ProviderCompetencyOut(CompetencyOut):
+    verified: bool = Field(
+        description="An uploaded document backs this competency (latest verification)"
+    )
 
+
+class VerificationSummary(BaseModel):
+    """The provider's latest verification, as shown on their profile."""
+
+    verification_id: int
+    confidence: float
+    verified: bool = Field(description="confidence >= the Verified threshold")
+    verified_at: datetime
+
+
+class ProviderOut(BaseModel):
     id: int
     name: str
     provider_type: ProviderType
@@ -38,7 +51,10 @@ class ProviderOut(BaseModel):
     longitude: float | None
     created_at: datetime
     updated_at: datetime
-    competencies: list[CompetencyOut]
+    competencies: list[ProviderCompetencyOut]
+    verification: VerificationSummary | None = Field(
+        description="Latest verification, or null if never verified"
+    )
 
 
 class DocumentOut(BaseModel):

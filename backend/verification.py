@@ -18,6 +18,21 @@ DOCUMENT_QUALITY_WEIGHTS: dict[DocumentSource, float] = {
     DocumentSource.pdf: 1.0,
 }
 
+# A provider is shown as "Verified" at or above this confidence.
+VERIFIED_THRESHOLD = 0.7
+
+# Statuses where an uploaded document shows the competency.
+DOCUMENT_BACKED = {VerificationStatus.corroborated, VerificationStatus.documented_only}
+
+
+def is_verified(confidence: float) -> bool:
+    return confidence >= VERIFIED_THRESHOLD
+
+
+def document_backed_competencies(checks: list[CompetencyCheck]) -> set[str]:
+    """Competency codes that a document backs up, shown as verified on their own."""
+    return {check.competency for check in checks if check.status in DOCUMENT_BACKED}
+
 
 def cross_check(claims: list[Claim]) -> list[CompetencyCheck]:
     """Label each competency by comparing bio claims with document claims.
