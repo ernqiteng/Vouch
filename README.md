@@ -113,9 +113,10 @@ Create `backend/.env` (it is gitignored, so never committed):
 ```
 DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@localhost/vouch_dev
 GEMINI_API_KEY=your-key-from-aistudio.google.com
+JWT_SECRET=a-long-random-string
 ```
 
-Search uses Gemini's free tier. Get a key from Google AI Studio (no billing needed).
+Search uses Gemini's free tier. Get a key from Google AI Studio (no billing needed). `JWT_SECRET` signs login tokens; generate one with `python -c "import secrets; print(secrets.token_urlsafe(48))"` and keep it private.
 
 Create the tables and add sample data:
 

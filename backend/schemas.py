@@ -1,9 +1,15 @@
 import enum
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from models import DocumentSource, ProviderType, VerificationStatus
+from models import (
+    CommunicationNeed,
+    DocumentSource,
+    MobilityDevice,
+    ProviderType,
+    VerificationStatus,
+)
 
 
 class CompetencyOut(BaseModel):
@@ -131,6 +137,48 @@ class ClaimsResponse(BaseModel):
         description="False if the LLM call failed and no claims could be extracted"
     )
     documents_used: int
+
+
+class SignupRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
+class UserOut(BaseModel):
+    """Public view of a user. Never includes the password hash."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    email: str
+    created_at: datetime
+
+
+class ProfileIn(BaseModel):
+    mobility_device: MobilityDevice | None = None
+    communication_needs: list[CommunicationNeed] = Field(default_factory=list)
+    required_competencies: list[str] = Field(
+        default_factory=list, description="Competency codes, e.g. ['hoist_transfer']"
+    )
+    location: str | None = Field(
+        default=None, max_length=255, description="Home city or postcode"
+    )
+
+
+class ProfileOut(ProfileIn):
+    model_config = ConfigDict(from_attributes=True)
+
+    updated_at: datetime
+
+
+class MeOut(BaseModel):
+    user: UserOut
+    profile: ProfileOut | None
 
 
 class SearchRequest(BaseModel):

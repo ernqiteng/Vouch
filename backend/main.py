@@ -2,6 +2,7 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFi
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from auth import router as auth_router
 from database import get_db
 from documents import MAX_UPLOAD_BYTES, DocumentError, clean_text, extract_text
 from llm import parse_search_query
@@ -30,6 +31,7 @@ from schemas import (
 from verification import cross_check, document_backed_competencies, is_verified
 
 app = FastAPI()
+app.include_router(auth_router)
 
 # Load related rows in one extra query each, instead of one query per provider.
 PROVIDER_DETAILS = (
