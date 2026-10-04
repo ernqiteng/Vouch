@@ -54,6 +54,10 @@ erDiagram
         jsonb document_ids
         jsonb claims
         jsonb checks
+        string llm_model
+        int llm_latency_ms
+        int llm_prompt_tokens
+        int llm_output_tokens
         timestamp created_at
     }
 ```
@@ -162,6 +166,10 @@ One row per verification run. Rows are never updated, so a provider's history is
 | `document_ids` | jsonb | not null | Ids of the documents used, e.g. `[4, 5]`. |
 | `claims` | jsonb | not null | The claims extracted by the LLM: `{competency, source, snippet}`. |
 | `checks` | jsonb | not null | Per-competency cross-check results: `{competency, status, bio_snippet, document_snippet}`. |
+| `llm_model` | varchar(64) | nullable | The Gemini model that answered the extraction call. |
+| `llm_latency_ms` | integer | nullable | Extraction time in milliseconds, including failed attempts on other models. |
+| `llm_prompt_tokens` | integer | nullable | Input tokens used by the extraction call. |
+| `llm_output_tokens` | integer | nullable | Output tokens used by the extraction call. |
 | `created_at` | timestamptz | not null, default `now()` | |
 
 **Indexes:** `provider_id`.
