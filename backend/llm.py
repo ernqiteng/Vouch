@@ -72,8 +72,15 @@ T = TypeVar("T", bound=BaseModel)
 
 @cache
 def _client() -> genai.Client:
-    # Reads GEMINI_API_KEY from the environment.
-    return genai.Client()
+    # Reads GEMINI_API_KEY from the environment. The SDK's own retries (5
+    # attempts with backoff) can stall for minutes on an overloaded model, so
+    # fail fast and let the MODELS list move on to the next model instead.
+    return genai.Client(
+        http_options=types.HttpOptions(
+            timeout=15_000,  # milliseconds
+            retry_options=types.HttpRetryOptions(attempts=1),
+        )
+    )
 
 
 def _generate(system: str, contents: str, schema: type[T], what: str) -> T | None:
