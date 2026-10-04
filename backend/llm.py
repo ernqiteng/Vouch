@@ -21,9 +21,13 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-# Tried in order. Free-tier models are sometimes overloaded (503), so a second
-# model keeps things working. Override with GEMINI_MODELS=a,b in .env.
-MODELS = os.getenv("GEMINI_MODELS", "gemini-3.8-flash,gemini-3.5-flash").split(",")
+# Tried in order. Free-tier models are sometimes overloaded (503) and each has
+# its own daily request limit (429), so later models take over when earlier ones
+# fail. Override with GEMINI_MODELS=a,b in .env.
+MODELS = os.getenv(
+    "GEMINI_MODELS",
+    "gemini-3.8-flash,gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash",
+).split(",")
 
 SEARCH_PROMPT = """\
 You turn a disabled person's request for a carer or driver into search filters.
