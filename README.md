@@ -122,9 +122,10 @@ Create the tables and add sample data:
 ```bash
 alembic upgrade head
 python seed.py
+python verify_all.py
 ```
 
-`python seed.py --reset` deletes all providers and re-adds the sample set.
+`seed.py` adds sample providers (if there are none) and sample certificates for some of them. `verify_all.py` runs verification on every provider with documents, using one Gemini call each, so their Verified badges appear. `python seed.py --reset` deletes all providers and re-adds the sample set.
 
 ### Run the backend
 
@@ -149,6 +150,23 @@ npm run dev
 ```
 
 The app runs at http://localhost:5173.
+
+### Run the tests
+
+From `backend/`, with the virtual environment active:
+
+```bash
+pip install -r requirements-dev.txt   # once, adds pytest
+pytest
+```
+
+To measure claim extraction accuracy against the hand-labelled eval set in `backend/evals/claims_eval.json` (one Gemini call per case, about 4 minutes):
+
+```bash
+python -m evals.run_claims_eval
+```
+
+It prints precision, recall, latency and token usage, and saves the full results to `backend/evals/results/`.
 
 ### After pulling new changes
 

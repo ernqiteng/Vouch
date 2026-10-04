@@ -1,0 +1,1094 @@
+{
+  "run_at": "2026-10-04T20:35:24",
+  "summary": {
+    "cases_total": 32,
+    "cases_scored": 32,
+    "cases_failed": [],
+    "cases_perfect": 31,
+    "true_positives": 42,
+    "false_positives": 0,
+    "false_negatives": 1,
+    "precision": 1.0,
+    "recall": 0.977,
+    "f1": 0.988,
+    "latency_ms": {
+      "mean": 3297,
+      "p50": 2122,
+      "p95": 7464,
+      "max": 11391
+    },
+    "tokens_per_call": {
+      "prompt_mean": 321,
+      "output_mean": 55
+    },
+    "models_used": {
+      "gemini-3.8-flash": 1,
+      "gemini-3.7-flash": 5,
+      "gemini-3.6-flash": 14,
+      "gemini-3.5-flash": 12
+    }
+  },
+  "by_competency": {
+    "autism_awareness": {
+      "tp": 2,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    "bsl_fluent": {
+      "tp": 5,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    "dementia_care": {
+      "tp": 3,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    "first_aid": {
+      "tp": 5,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    "hoist_transfer": {
+      "tp": 5,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    "manual_handling": {
+      "tp": 4,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    "medication_administration": {
+      "tp": 4,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    "peg_feeding": {
+      "tp": 4,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    "personal_care": {
+      "tp": 5,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    "wav_driving": {
+      "tp": 3,
+      "fp": 0,
+      "fn": 1,
+      "precision": 1.0,
+      "recall": 0.75
+    },
+    "wheelchair_assistance": {
+      "tp": 2,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0
+    }
+  },
+  "cases": [
+    {
+      "id": "bio_hoist_and_manual",
+      "tests": "simple bio claims",
+      "model": "gemini-3.8-flash",
+      "latency_ms": 3720,
+      "expected": [
+        [
+          "hoist_transfer",
+          "bio"
+        ],
+        [
+          "manual_handling",
+          "bio"
+        ]
+      ],
+      "predicted": [
+        [
+          "hoist_transfer",
+          "bio"
+        ],
+        [
+          "manual_handling",
+          "bio"
+        ]
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "snippets": [
+        {
+          "competency": "hoist_transfer",
+          "source": "bio",
+          "snippet": "Trained in hoist transfers"
+        },
+        {
+          "competency": "manual_handling",
+          "source": "bio",
+          "snippet": "manual handling"
+        }
+      ]
+    },
+    {
+      "id": "doc_first_aid_only",
+      "tests": "document-only claim",
+      "model": "gemini-3.7-flash",
+      "latency_ms": 10013,
+      "expected": [
+        [
+          "first_aid",
+          "document"
+        ]
+      ],
+      "predicted": [
+        [
+          "first_aid",
+          "document"
+        ]
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "snippets": [
+        {
+          "competency": "first_aid",
+          "source": "document",
+          "snippet": "First Aid at Work certificate."
+        }
+      ]
+    },
+    {
+      "id": "bsl_bio_and_doc",
+      "tests": "same competency in both texts",
+      "model": "gemini-3.7-flash",
+      "latency_ms": 4249,
+      "expected": [
+        [
+          "bsl_fluent",
+          "bio"
+        ],
+        [
+          "bsl_fluent",
+          "document"
+        ]
+      ],
+      "predicted": [
+        [
+          "bsl_fluent",
+          "bio"
+        ],
+        [
+          "bsl_fluent",
+          "document"
+        ]
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "snippets": [
+        {
+          "competency": "bsl_fluent",
+          "source": "bio",
+          "snippet": "I am a fluent BSL user."
+        },
+        {
+          "competency": "bsl_fluent",
+          "source": "document",
+          "snippet": "Signature Level 6 NVQ Certificate in British Sign Language."
+        }
+      ]
+    },
+    {
+      "id": "negated_hoist",
+      "tests": "negation must not become a claim",
+      "model": "gemini-3.7-flash",
+      "latency_ms": 3741,
+      "expected": [
+        [
+          "first_aid",
+          "bio"
+        ]
+      ],
+      "predicted": [
+        [
+          "first_aid",
+          "bio"
+        ]
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "snippets": [
+        {
+          "competency": "first_aid",
+          "source": "bio",
+          "snippet": "I am first aid trained."
+        }
+      ]
+    },
+    {
+      "id": "future_bsl",
+      "tests": "future plans are not claims",
+      "model": "gemini-3.6-flash",
+      "latency_ms": 5674,
+      "expected": [
+        [
+          "personal_care",
+          "bio"
+        ]
+      ],
+      "predicted": [
+        [
+          "personal_care",
+          "bio"
+        ]
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "snippets": [
+        {
+          "competency": "personal_care",
+          "source": "bio",
+          "snippet": "Experienced with personal care."
+        }
+      ]
+    },
+    {
+      "id": "someone_elses_skill",
+      "tests": "another person's skill is not the provider's",
+      "model": "gemini-3.7-flash",
+      "latency_ms": 5103,
+      "expected": [],
+      "predicted": [],
+      "false_positives": [],
+      "false_negatives": [],
+      "snippets": []
+    },
+    {
+      "id": "vague_bio",
+      "tests": "vague enthusiasm is not a competency",
+      "model": "gemini-3.6-flash",
+      "latency_ms": 4611,
+      "expected": [],
+      "predicted": [],
+      "false_positives": [],
+      "false_negatives": [],
+      "snippets": []
+    },
+    {
+      "id": "peg_synonym",
+      "tests": "synonym: enteral feeding",
+      "model": "gemini-3.7-flash",
+      "latency_ms": 11391,
+      "expected": [
+        [
+          "peg_feeding",
+          "bio"
+        ]
+      ],
+      "predicted": [
+        [
+          "peg_feeding",
+          "bio"
+        ]
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "snippets": [
+        {
+          "competency": "peg_feeding",
+          "source": "bio",
+          "snippet": "Experienced with enteral feeding through a PEG tube."
+        }
+      ]
+    },
+    {
+      "id": "medication_synonym_doc",
+      "tests": "synonym: handling of medicines",
+      "model": "gemini-3.6-flash",
+      "latency_ms": 4304,
+      "expected": [
+        [
+          "medication_administration",
+          "document"
+        ]
+      ],
+      "predicted": [
+        [
+          "medication_administration",
+          "document"
+        ]
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "snippets": [
+        {
+          "competency": "medication_administration",
+          "source": "document",
+          "snippet": "Completed Safe Handling of Medicines course (Level 3), 2024."
+        }
+      ]
+    },
+    {
+      "id": "wav_bio",
+      "tests": "accessible vehicle described rather than named",
+      "model": "gemini-3.6-flash",
+      "latency_ms": 3632,
+      "expected": [
+        [
+          "wav_driving",
+          "bio"
+        ]
+      ],
+      "predicted": [
+        [
+          "wav_driving",
+          "bio"
+        ]
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "snippets": [
+        {
+          "competency": "wav_driving",
+          "source": "bio",
+          "snippet": "I drive a wheelchair-accessible minibus"
+        }
+      ]
+    },
+    {
+      "id": "wheelchair_assistance_bio",
+      "tests": "wheelchair help described in plain words",
+      "model": "gemini-3.6-flash",
+      "latency_ms": 1729,
+      "expected": [
+        [
+          "wheelchair_assistance",
+          "bio"
+        ]
+      ],
+      "predicted": [
+        [
+          "wheelchair_assistance",
+          "bio"
+        ]
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "snippets": [
+        {
+          "competency": "wheelchair_assistance",
+          "source": "bio",
+          "snippet": "I help passengers transfer from their wheelchair into the car and fold it into the boot."
+        }
+      ]
+    },
+    {
+      "id": "autism_both",
+      "tests": "corroborated autism awareness",
+      "model": "gemini-3.5-flash",
+      "latency_ms": 3050,
+      "expected": [
+        [
+          "autism_awareness",
+          "bio"
+        ],
+        [
+          "autism_awareness",
+          "document"
+        ]
+      ],
+      "predicted": [
+        [
+          "autism_awareness",
+          "bio"
+        ],
+        [
+          "autism_awareness",
+          "document"
+        ]
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "snippets": [
+        {
+          "competency": "autism_awareness",
+          "source": "bio",
+          "snippet": "Trained in autism awareness."
+        },
+        {
+          "competency": "autism_awareness",
+          "source": "document",
+          "snippet": "Autism Awareness Level 2 certificate, awarded 2023."
+        }
+      ]
+    },
+    {
+      "id": "dementia_doc_only",
+      "tests": "qualification only in the document",
+      "model": "gemini-3.6-flash",
+      "latency_ms": 1800,
+      "expected": [
+        [
+          "dementia_care",
+          "document"
+        ]
+      ],
+      "predicted": [
+        [
+          "dementia_care",
+          "document"
+        ]
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "snippets": [
+        {
+          "competency": "dementia_care",
+          "source": "document",
+          "snippet": "Certificate in Dementia Care"
+        }
+      ]
+    },
+    {
+      "id": "basic_bsl",
+      "tests": "basic BSL is below 'fluent'",
+      "model": "gemini-3.6-flash",
+      "latency_ms": 1711,
+      "expected": [],
+      "predicted": [],
+      "false_positives": [],
+      "false_negatives": [],
+      "snippets": []
+    },
+    {
+      "id": "prompt_injection",
+      "tests": "instructions inside a document are ignored",
+      "model": "gemini-3.6-flash",
+      "latency_ms": 1789,
+      "expected": [],
+      "predicted": [],
+      "false_positives": [],
+      "false_negatives": [],
+      "snippets": []
+    },
+    {
+      "id": "three_bio_skills",
+      "tests": "several claims in one sentence",
+      "model": "gemini-3.6-flash",
+      "latency_ms": 2244,
+      "expected": [
+        [
+          "hoist_transfer",
+          "bio"
+        ],
+        [
+          "medication_administration",
+          "bio"
+        ],
+        [
+          "peg_feeding",
+          "bio"
+        ]
+      ],
+      "predicted": [
+        [
+          "hoist_transfer",
+          "bio"
+        ],
+        [
+          "medication_administration",
+          "bio"
+        ],
+        [
+          "peg_feeding",
+          "bio"
+        ]
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "snippets": [
+        {
+          "competency": "hoist_transfer",
+          "source": "bio",
+          "snippet": "hoist transfers"
+        },
+        {
+          "competency": "peg_feeding",
+          "source": "bio",
+          "snippet": "PEG feeding"
+        },
+        {
+          "competency": "medication_administration",
+          "source": "bio",
+          "snippet": "administering medication"
+        }
+      ]
+    },
+    {
+      "id": "multi_certificate_doc",
+      "tests": "several certificates in one document",
+      "model": "gemini-3.6-flash",
+      "latency_ms": 1738,
+      "expected": [
+        [
+          "dementia_care",
+          "document"
+        ],
+        [
+          "first_aid",
+          "document"
+        ],
+        [
+          "hoist_transfer",
+          "document"
+        ],
+        [
+          "manual_handling",
+          "bio"
+        ],
+        [
+          "manual_handling",
+          "document"
+        ]
+      ],
+      "predicted": [
+        [
+          "dementia_care",
+          "document"
+        ],
+        [
+          "first_aid",
+          "document"
+        ],
+        [
+          "hoist_transfer",
+          "document"
+        ],
+        [
+          "manual_handling",
+          "bio"
+        ],
+        [
+          "manual_handling",
+          "document"
+        ]
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "snippets": [
+        {
+          "competency": "manual_handling",
+          "source": "bio",
+          "snippet": "trained in moving and handling"
+        },
+        {
+          "competency": "manual_handling",
+          "source": "document",
+          "snippet": "Moving and Handling of People"
+        },
+        {
+          "competency": "hoist_transfer",
+          "source": "document",
+          "snippet": "hoist transfers"
+        },
+        {
+          "competency": "first_aid",
+          "source": "document",
+          "snippet": "Emergency First Aid at Work"
+        },
+        {
+          "competency": "dementia_care",
+          "source": "document",
+          "snippet": "Level 2 Certificate in Dementia Care"
+        }
+      ]
+    },
+    {
+      "id": "personal_care_described",
+      "tests": "personal care described as tasks",
+      "model": "gemini-3.6-flash",
+      "latency_ms": 1751,
+      "expected": [
+        [
+          "personal_care",
+          "bio"
+        ]
+      ],
+      "predicted": [
+        [
+          "personal_care",
+          "bio"
+        ]
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "snippets": [
+        {
+          "competency": "personal_care",
+          "source": "bio",
+          "snippet": "I help clients with washing, dressing and toileting."
+        }
+      ]
+    },
+    {
+      "id": "driver_bsl_both",
+      "tests": "two competencies corroborated",
+      "model": "gemini-3.6-flash",
+      "latency_ms": 2122,
+      "expected": [
+        [
+          "bsl_fluent",
+          "bio"
+        ],
+        [
+          "bsl_fluent",
+          "document"
+        ],
+        [
+          "wav_driving",
+          "bio"
+        ],
+        [
+          "wav_driving",
+          "document"
+        ]
+      ],
+      "predicted": [
+        [
+          "bsl_fluent",
+          "bio"
+        ],
+        [
+          "bsl_fluent",
+          "document"
+        ],
+        [
+          "wav_driving",
+          "document"
+        ]
+      ],
+      "false_positives": [],
+      "false_negatives": [
+        [
+          "wav_driving",
+          "bio"
+        ]
+      ],
+      "snippets": [
+        {
+          "competency": "bsl_fluent",
+          "source": "bio",
+          "snippet": "fluent BSL signer"
+        },
+        {
+          "competency": "wav_driving",
+          "source": "document",
+          "snippet": "Wheelchair accessible vehicle (WAV) driver assessment: passed."
+        },
+        {
+          "competency": "bsl_fluent",
+          "source": "document",
+          "snippet": "Signature Level 6 NVQ Certificate in British Sign Language."
+        }
+      ]
+    },
+    {
+      "id": "manual_not_hoist",
+      "tests": "related skill negated in the same text",
+      "model": "gemini-3.5-flash",
+      "latency_ms": 1518,
+      "expected": [
+        [
+          "manual_handling",
+          "bio"
+        ]
+      ],
+      "predicted": [
+        [
+          "manual_handling",
+          "bio"
+        ]
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "snippets": [
+        {
+          "competency": "manual_handling",
+          "source": "bio",
+          "snippet": "Trained in manual handling."
+        }
+      ]
+    },
+    {
+      "id": "empty_bio_hoist_doc",
+      "tests": "empty bio, claim only from document",
+      "model": "gemini-3.5-flash",
+      "latency_ms": 1383,
+      "expected": [
+        [
+          "hoist_transfer",
+          "document"
+        ]
+      ],
+      "predicted": [
+        [
+          "hoist_transfer",
+          "document"
+        ]
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "snippets": [
+        {
+          "competency": "hoist_transfer",
+          "source": "document",
+          "snippet": "Competent: ceiling hoist and mobile hoist transfers."
+        }
+      ]
+    },
+    {
+      "id": "long_mixed_bio",
+      "tests": "skills mixed with irrelevant hobbies",
+      "model": "gemini-3.5-flash",
+      "latency_ms": 7464,
+      "expected": [
+        [
+          "dementia_care",
+          "bio"
+        ],
+        [
+          "first_aid",
+          "bio"
+        ],
+        [
+          "medication_administration",
+          "bio"
+        ]
+      ],
+      "predicted": [
+        [
+          "dementia_care",
+          "bio"
+        ],
+        [
+          "first_aid",
+          "bio"
+        ],
+        [
+          "medication_administration",
+          "bio"
+        ]
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "snippets": [
+        {
+          "competency": "first_aid",
+          "source": "bio",
+          "snippet": "I'm trained in first aid"
+        },
+        {
+          "competency": "medication_administration",
+          "source": "bio",
+          "snippet": "medication administration"
+        },
+        {
+          "competency": "dementia_care",
+          "source": "bio",
+          "snippet": "I specialise in dementia care"
+        }
+      ]
+    },
+    {
+      "id": "no_skills",
+      "tests": "logistics only, no competencies",
+      "model": "gemini-3.5-flash",
+      "latency_ms": 1603,
+      "expected": [],
+      "predicted": [],
+      "false_positives": [],
+      "false_negatives": [],
+      "snippets": []
+    },
+    {
+      "id": "saloon_car_negative",
+      "tests": "explicitly not wheelchair accessible",
+      "model": "gemini-3.6-flash",
+      "latency_ms": 1903,
+      "expected": [],
+      "predicted": [],
+      "false_positives": [],
+      "false_negatives": [],
+      "snippets": []
+    },
+    {
+      "id": "first_aid_provider_doc",
+      "tests": "first aid named by training provider",
+      "model": "gemini-3.6-flash",
+      "latency_ms": 1753,
+      "expected": [
+        [
+          "first_aid",
+          "document"
+        ]
+      ],
+      "predicted": [
+        [
+          "first_aid",
+          "document"
+        ]
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "snippets": [
+        {
+          "competency": "first_aid",
+          "source": "document",
+          "snippet": "Emergency First Aid at Work"
+        }
+      ]
+    },
+    {
+      "id": "personal_care_both",
+      "tests": "personal care corroborated by Care Certificate",
+      "model": "gemini-3.5-flash",
+      "latency_ms": 1623,
+      "expected": [
+        [
+          "personal_care",
+          "bio"
+        ],
+        [
+          "personal_care",
+          "document"
+        ]
+      ],
+      "predicted": [
+        [
+          "personal_care",
+          "bio"
+        ],
+        [
+          "personal_care",
+          "document"
+        ]
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "snippets": [
+        {
+          "competency": "personal_care",
+          "source": "bio",
+          "snippet": "I help with personal care."
+        },
+        {
+          "competency": "personal_care",
+          "source": "document",
+          "snippet": "The Care Certificate: Standard 9, personal care and dignity."
+        }
+      ]
+    },
+    {
+      "id": "autism_negative",
+      "tests": "explicit lack of experience",
+      "model": "gemini-3.5-flash",
+      "latency_ms": 4279,
+      "expected": [],
+      "predicted": [],
+      "false_positives": [],
+      "false_negatives": [],
+      "snippets": []
+    },
+    {
+      "id": "clinical_signoff",
+      "tests": "clinical sign-off sheet",
+      "model": "gemini-3.5-flash",
+      "latency_ms": 1912,
+      "expected": [
+        [
+          "medication_administration",
+          "document"
+        ],
+        [
+          "peg_feeding",
+          "bio"
+        ],
+        [
+          "peg_feeding",
+          "document"
+        ]
+      ],
+      "predicted": [
+        [
+          "medication_administration",
+          "document"
+        ],
+        [
+          "peg_feeding",
+          "bio"
+        ],
+        [
+          "peg_feeding",
+          "document"
+        ]
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "snippets": [
+        {
+          "competency": "peg_feeding",
+          "source": "bio",
+          "snippet": "Healthcare assistant experienced with PEG feeding."
+        },
+        {
+          "competency": "peg_feeding",
+          "source": "document",
+          "snippet": "PEG feeding: competent."
+        },
+        {
+          "competency": "medication_administration",
+          "source": "document",
+          "snippet": "Medication administration: competent."
+        }
+      ]
+    },
+    {
+      "id": "bsl_first_language",
+      "tests": "fluency implied by first language",
+      "model": "gemini-3.5-flash",
+      "latency_ms": 1675,
+      "expected": [
+        [
+          "bsl_fluent",
+          "bio"
+        ]
+      ],
+      "predicted": [
+        [
+          "bsl_fluent",
+          "bio"
+        ]
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "snippets": [
+        {
+          "competency": "bsl_fluent",
+          "source": "bio",
+          "snippet": "British Sign Language is my first language."
+        }
+      ]
+    },
+    {
+      "id": "midas_doc",
+      "tests": "driver training covering two competencies",
+      "model": "gemini-3.5-flash",
+      "latency_ms": 3250,
+      "expected": [
+        [
+          "wav_driving",
+          "document"
+        ],
+        [
+          "wheelchair_assistance",
+          "document"
+        ]
+      ],
+      "predicted": [
+        [
+          "wav_driving",
+          "document"
+        ],
+        [
+          "wheelchair_assistance",
+          "document"
+        ]
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "snippets": [
+        {
+          "competency": "wav_driving",
+          "source": "document",
+          "snippet": "wheelchair accessible vehicle driving"
+        },
+        {
+          "competency": "wheelchair_assistance",
+          "source": "document",
+          "snippet": "wheelchair securing and ramp operation"
+        }
+      ]
+    },
+    {
+      "id": "doc_contradicts_nothing_claimed",
+      "tests": "unrelated document",
+      "model": "gemini-3.5-flash",
+      "latency_ms": 1403,
+      "expected": [
+        [
+          "personal_care",
+          "bio"
+        ]
+      ],
+      "predicted": [
+        [
+          "personal_care",
+          "bio"
+        ]
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "snippets": [
+        {
+          "competency": "personal_care",
+          "source": "bio",
+          "snippet": "Carer specialising in personal care."
+        }
+      ]
+    },
+    {
+      "id": "hoist_described",
+      "tests": "hoist skill described, not named as training",
+      "model": "gemini-3.5-flash",
+      "latency_ms": 1353,
+      "expected": [
+        [
+          "hoist_transfer",
+          "bio"
+        ]
+      ],
+      "predicted": [
+        [
+          "hoist_transfer",
+          "bio"
+        ]
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "snippets": [
+        {
+          "competency": "hoist_transfer",
+          "source": "bio",
+          "snippet": "I use mobile and ceiling hoists every day to move clients safely between bed and chair."
+        }
+      ]
+    }
+  ]
+}

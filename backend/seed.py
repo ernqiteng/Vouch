@@ -1,7 +1,8 @@
-"""Fill the database with fake providers for development.
+"""Fill the database with fake providers and sample certificates for development.
 
 Run from backend/:
-    python seed.py           # adds providers only if the table is empty
+    python seed.py           # adds providers if the table is empty, plus any
+                             # missing sample certificates
     python seed.py --reset   # deletes ALL providers first, then adds them
 """
 import sys
@@ -9,7 +10,15 @@ import sys
 from sqlalchemy import delete, func, select
 
 from database import SessionLocal
-from models import Competency, Provider, ProviderCompetency, ProviderType
+from documents import clean_text
+from models import (
+    Competency,
+    Document,
+    DocumentSource,
+    Provider,
+    ProviderCompetency,
+    ProviderType,
+)
 from seed_competencies import seed_competencies
 
 CITIES = {
@@ -106,15 +115,77 @@ PROVIDERS = [
 ]
 
 
+# Sample certificates for some providers: (provider name, title, text).
+# Some cover everything the bio claims and some only part of it, so the demo
+# shows both fully verified and partly verified providers once verify_all.py
+# has been run.
+DOCUMENTS = [
+    ("Amara Okafor", "Moving and handling + first aid",
+     "CERTIFICATE OF COMPLETION\nSafe Moving and Handling of People, including hoist transfers\n"
+     "Awarded to Amara Okafor, February 2025\n\n"
+     "FIRST AID AT WORK\nThis certifies that Amara Okafor has completed First Aid at Work training. "
+     "Valid until 2027."),
+    ("Grace Mensah", "Hoist and BSL certificates",
+     "Certificate: Moving and Handling of People, including hoist transfers. Grace Mensah, 2024.\n"
+     "Signature Level 6 NVQ Certificate in British Sign Language. Awarded to Grace Mensah."),
+    ("Tom Fletcher", "Clinical skills record",
+     "Clinical skills sign-off for Tom Fletcher, Healthcare Assistant.\n"
+     "Competent: hoist transfers (mobile and ceiling hoists).\n"
+     "Competent: enteral feeding via PEG tube.\n"
+     "Competent: safe administration of medication."),
+    ("Priya Sharma", "BSL qualification",
+     "Signature Level 3 Certificate in British Sign Language Studies. Awarded to Priya Sharma, 2023."),
+    ("Kwame Asante", "Hoist training",
+     "Training record: Kwame Asante completed hoist transfer training (ceiling and mobile hoists), 2025."),
+    ("Fiona MacLeod", "Dementia and medication training",
+     "Certificate in Dementia Care (SCQF Level 7), awarded to Fiona MacLeod.\n"
+     "Safe Administration of Medication course completed, 2024."),
+    ("James Carter", "Accessible driver training",
+     "MiDAS Accessible Driver Training: wheelchair-accessible vehicle driving, ramp operation and "
+     "wheelchair securing. Awarded to James Carter.\nEmergency First Aid at Work, valid until 2026."),
+    ("Nadia Hussain", "Driver and BSL certificates",
+     "Wheelchair accessible vehicle (WAV) driver assessment: passed. Nadia Hussain, 2025.\n"
+     "Signature Level 6 NVQ Certificate in British Sign Language. Awarded to Nadia Hussain."),
+]
+
+
+def seed_documents() -> int:
+    """Add any sample certificates that are missing. Safe to run repeatedly."""
+    added = 0
+    with SessionLocal() as db:
+        for name, title, text in DOCUMENTS:
+            provider = db.scalar(select(Provider).where(Provider.name == name))
+            if provider is None or any(d.title == title for d in provider.documents):
+                continue
+            provider.documents.append(Document(
+                title=title, source_type=DocumentSource.pasted, raw_text=clean_text(text)
+            ))
+            added += 1
+        db.commit()
+    return added
+
+
 def seed(reset: bool = False) -> None:
     seed_competencies()
 
     with SessionLocal() as db:
         if reset:
             db.execute(delete(Provider))
-        elif db.scalar(select(func.count()).select_from(Provider)):
-            print("Providers table is not empty. Run with --reset to replace its contents.")
-            return
+            db.commit()
+        has_providers = db.scalar(select(func.count()).select_from(Provider))
+    if has_providers:
+        print("Providers table is not empty, so no providers added "
+              "(run with --reset to replace them).")
+    else:
+        add_providers()
+        print(f"Added {len(PROVIDERS)} providers.")
+
+    print(f"Added {seed_documents()} sample documents. "
+          "Run `python verify_all.py` to verify the providers that have documents.")
+
+
+def add_providers() -> None:
+    with SessionLocal() as db:
 
         competencies = {c.code: c for c in db.scalars(select(Competency))}
         for name, provider_type, city, codes, bio in PROVIDERS:
@@ -131,8 +202,6 @@ def seed(reset: bool = False) -> None:
                 ],
             ))
         db.commit()
-
-    print(f"Added {len(PROVIDERS)} providers.")
 
 
 if __name__ == "__main__":

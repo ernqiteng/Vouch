@@ -170,6 +170,19 @@ function Results({ data, labels }: { data: SearchResponse; labels: Record<string
           <p className="count">
             {results.length} {results.length === 1 ? 'provider' : 'providers'} found
           </p>
+          <div className="legend">
+            <span>
+              <span className="tag tag-verified">Skill</span>backed by a document
+            </span>
+            <span>
+              <span className="tag">Skill</span>self-reported
+            </span>
+            {highlighted.size > 0 && (
+              <span>
+                <span className="tag tag-match">Skill</span>matches your search
+              </span>
+            )}
+          </div>
           <div className="cards">
             {results.map((provider) => (
               <ProviderCard key={provider.id} provider={provider} highlighted={highlighted} />

@@ -220,9 +220,8 @@ button.example:hover {
 
 .card-header {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 8px;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .card h3 {
@@ -230,14 +229,39 @@ button.example:hover {
   font-size: 19px;
 }
 
-.type-badge {
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.type-badge,
+.status-badge {
   font-size: 13px;
   font-weight: 700;
   padding: 2px 10px;
   border-radius: 999px;
   white-space: nowrap;
+}
+
+.type-badge {
   background: var(--accent-soft);
   color: var(--accent-strong);
+}
+
+.status-verified {
+  background: var(--match-bg);
+  color: var(--match-text);
+}
+
+.status-self {
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.card-evidence {
+  color: var(--muted);
+  font-size: 14px;
 }
 
 .card-location {
@@ -272,15 +296,39 @@ button.example:hover {
   border: 1px solid var(--border);
 }
 
-.tag-match {
+/* Backed by a document */
+.tag-verified {
   background: var(--match-bg);
   color: var(--match-text);
   border-color: transparent;
   font-weight: 600;
 }
 
-.tag-match::before {
+.tag-verified::before {
   content: '✓ ';
+}
+
+/* Matches the current search: a blue ring, so it reads independently of
+   the verified colour. */
+.tag-match {
+  box-shadow: 0 0 0 2px var(--accent);
+  font-weight: 600;
+}
+
+/* Legend above the results */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  font-size: 14px;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+
+.legend .tag {
+  display: inline-block;
+  margin-right: 6px;
 }
 
 .tag-filter {
