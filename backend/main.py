@@ -12,8 +12,10 @@ from models import (
     Provider,
     ProviderCompetency,
     ProviderType,
+    Verification,
 )
 from schemas import (
+    Claim,
     ClaimsResponse,
     CompetencyOut,
     DocumentOut,
@@ -21,8 +23,9 @@ from schemas import (
     ProviderOut,
     SearchRequest,
     SearchResponse,
+    VerificationOut,
 )
-from verification import cross_check
+from verification import cross_check, score
 
 app = FastAPI()
 
@@ -169,13 +172,8 @@ def extract_provider_claims(provider_id: int, db: Session = Depends(get_db)):
 
     Stores nothing. Useful for seeing what verification would conclude.
     """
-    provider = db.get(Provider, provider_id)
-    if provider is None:
-        raise HTTPException(status_code=404, detail="Provider not found")
-
-    competencies = {c.code: c.label for c in db.scalars(select(Competency))}
-    document_text = "\n\n".join(d.raw_text for d in provider.documents)
-    claims, ok = extract_claims(provider.bio or "", document_text, competencies)
+    provider = _provider_or_404(provider_id, db)
+    claims, ok = _extract(provider, db)
     return ClaimsResponse(
         provider_id=provider_id,
         claims=claims,
@@ -183,6 +181,58 @@ def extract_provider_claims(provider_id: int, db: Session = Depends(get_db)):
         extraction_ok=ok,
         documents_used=len(provider.documents),
     )
+
+
+@app.post(
+    "/providers/{provider_id}/verify", response_model=VerificationOut, status_code=201
+)
+def verify_provider(provider_id: int, db: Session = Depends(get_db)):
+    """Run the full pipeline and store the result as a new verification.
+
+    LLM extracts claims -> plain code cross-checks them -> plain code scores them.
+    If extraction fails nothing is stored, so a good score is never replaced by
+    an empty one.
+    """
+    provider = _provider_or_404(provider_id, db)
+    claims, ok = _extract(provider, db)
+    if not ok:
+        raise HTTPException(
+            status_code=503,
+            detail="Claim extraction is unavailable right now. Please try again shortly.",
+        )
+
+    checks = cross_check(claims)
+    result = score(checks, [d.source_type for d in provider.documents])
+    verification = Verification(
+        provider_id=provider_id,
+        **result.model_dump(),
+        document_ids=[d.id for d in provider.documents],
+        claims=[c.model_dump(mode="json") for c in claims],
+        checks=[c.model_dump(mode="json") for c in checks],
+    )
+    db.add(verification)
+    db.commit()
+    db.refresh(verification)
+    return verification
+
+
+@app.get("/providers/{provider_id}/verifications", response_model=list[VerificationOut])
+def list_verifications(provider_id: int, db: Session = Depends(get_db)):
+    """A provider's verification history, oldest first. The last one is current."""
+    return _provider_or_404(provider_id, db).verifications
+
+
+def _provider_or_404(provider_id: int, db: Session) -> Provider:
+    provider = db.get(Provider, provider_id)
+    if provider is None:
+        raise HTTPException(status_code=404, detail="Provider not found")
+    return provider
+
+
+def _extract(provider: Provider, db: Session) -> tuple[list[Claim], bool]:
+    competencies = {c.code: c.label for c in db.scalars(select(Competency))}
+    document_text = "\n\n".join(d.raw_text for d in provider.documents)
+    return extract_claims(provider.bio or "", document_text, competencies)
 
 
 @app.get("/providers/{provider_id}/documents", response_model=list[DocumentOut])

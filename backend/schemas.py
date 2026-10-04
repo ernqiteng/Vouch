@@ -81,6 +81,28 @@ class CompetencyCheck(BaseModel):
     document_snippet: str | None = None
 
 
+class ConfidenceScore(BaseModel):
+    """A confidence score together with every input used to calculate it."""
+
+    confidence: float = Field(ge=0, le=1)
+    corroborated_count: int
+    self_reported_count: int
+    documented_only_count: int
+    total_claimed_count: int = Field(description="corroborated + self_reported")
+    document_quality_weight: float
+
+
+class VerificationOut(ConfidenceScore):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    provider_id: int
+    document_ids: list[int]
+    claims: list[Claim]
+    checks: list[CompetencyCheck]
+    created_at: datetime
+
+
 class ClaimsResponse(BaseModel):
     provider_id: int
     claims: list[Claim]

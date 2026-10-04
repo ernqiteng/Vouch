@@ -2,6 +2,7 @@ import enum
 from datetime import datetime
 
 from sqlalchemy import DateTime, Enum, Float, ForeignKey, String, Text, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -44,6 +45,12 @@ class Provider(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
         order_by="Document.created_at",
+    )
+    verifications: Mapped[list["Verification"]] = relationship(
+        back_populates="provider",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="Verification.id",
     )
 
     @property
@@ -117,3 +124,32 @@ class Document(Base):
     )
 
     provider: Mapped[Provider] = relationship(back_populates="documents")
+
+
+class Verification(Base):
+    """One verification run: the confidence score and every input behind it.
+
+    Rows are never updated, so a provider's history is kept; the newest row is
+    their current status.
+    """
+
+    __tablename__ = "verifications"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    provider_id: Mapped[int] = mapped_column(
+        ForeignKey("providers.id", ondelete="CASCADE"), index=True
+    )
+    confidence: Mapped[float] = mapped_column(Float)
+    corroborated_count: Mapped[int]
+    self_reported_count: Mapped[int]
+    documented_only_count: Mapped[int]
+    total_claimed_count: Mapped[int]
+    document_quality_weight: Mapped[float] = mapped_column(Float)
+    document_ids: Mapped[list[int]] = mapped_column(JSONB)
+    claims: Mapped[list[dict]] = mapped_column(JSONB)
+    checks: Mapped[list[dict]] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    provider: Mapped[Provider] = relationship(back_populates="verifications")
