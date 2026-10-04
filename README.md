@@ -150,6 +150,15 @@ npm run dev
 
 The app runs at http://localhost:5173.
 
+### Run the tests
+
+From `backend/`, with the virtual environment active:
+
+```bash
+pip install -r requirements-dev.txt   # once, adds pytest
+pytest
+```
+
 ### After pulling new changes
 
 ```bash
