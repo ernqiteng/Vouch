@@ -122,9 +122,10 @@ Create the tables and add sample data:
 ```bash
 alembic upgrade head
 python seed.py
+python verify_all.py
 ```
 
-`python seed.py --reset` deletes all providers and re-adds the sample set.
+`seed.py` adds sample providers (if there are none) and sample certificates for some of them. `verify_all.py` runs verification on every provider with documents, using one Gemini call each, so their Verified badges appear. `python seed.py --reset` deletes all providers and re-adds the sample set.
 
 ### Run the backend
 
