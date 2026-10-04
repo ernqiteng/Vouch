@@ -7,6 +7,19 @@ export interface Competency {
   label: string
 }
 
+export interface ProviderCompetency extends Competency {
+  /** An uploaded document backs this competency. */
+  verified: boolean
+}
+
+export interface VerificationSummary {
+  verification_id: number
+  confidence: number
+  /** confidence is at or above the Verified threshold (decided by the backend). */
+  verified: boolean
+  verified_at: string
+}
+
 export interface Provider {
   id: number
   name: string
@@ -17,7 +30,8 @@ export interface Provider {
   longitude: number | null
   created_at: string
   updated_at: string
-  competencies: Competency[]
+  competencies: ProviderCompetency[]
+  verification: VerificationSummary | null
 }
 
 export interface SearchFilter {
