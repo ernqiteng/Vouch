@@ -1,3 +1,4 @@
+import enum
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -50,6 +51,34 @@ class DocumentOut(BaseModel):
     filename: str | None
     raw_text: str
     created_at: datetime
+
+
+class ClaimSource(str, enum.Enum):
+    bio = "bio"
+    document = "document"
+
+
+class Claim(BaseModel):
+    """One competency the LLM found evidence for, with the text it relied on."""
+
+    competency: str = Field(description="A competency code from the fixed list")
+    source: ClaimSource
+    snippet: str = Field(description="The supporting text, copied exactly from the source")
+
+
+class ClaimList(BaseModel):
+    """Wrapper so the LLM returns a JSON object rather than a bare list."""
+
+    claims: list[Claim] = Field(default_factory=list)
+
+
+class ClaimsResponse(BaseModel):
+    provider_id: int
+    claims: list[Claim]
+    extraction_ok: bool = Field(
+        description="False if the LLM call failed and no claims could be extracted"
+    )
+    documents_used: int
 
 
 class SearchRequest(BaseModel):

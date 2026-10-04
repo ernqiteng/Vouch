@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from database import get_db
 from documents import MAX_UPLOAD_BYTES, DocumentError, clean_text, extract_text
-from llm import parse_search_query
+from llm import extract_claims, parse_search_query
 from models import (
     Competency,
     Document,
@@ -14,6 +14,7 @@ from models import (
     ProviderType,
 )
 from schemas import (
+    ClaimsResponse,
     CompetencyOut,
     DocumentOut,
     ProviderCreate,
@@ -159,6 +160,24 @@ def upload_document(
     db.commit()
     db.refresh(document)
     return document
+
+
+@app.post("/providers/{provider_id}/extract-claims", response_model=ClaimsResponse)
+def extract_provider_claims(provider_id: int, db: Session = Depends(get_db)):
+    """Run LLM claim extraction on a provider's bio and documents. Stores nothing."""
+    provider = db.get(Provider, provider_id)
+    if provider is None:
+        raise HTTPException(status_code=404, detail="Provider not found")
+
+    competencies = {c.code: c.label for c in db.scalars(select(Competency))}
+    document_text = "\n\n".join(d.raw_text for d in provider.documents)
+    claims, ok = extract_claims(provider.bio or "", document_text, competencies)
+    return ClaimsResponse(
+        provider_id=provider_id,
+        claims=claims,
+        extraction_ok=ok,
+        documents_used=len(provider.documents),
+    )
 
 
 @app.get("/providers/{provider_id}/documents", response_model=list[DocumentOut])
