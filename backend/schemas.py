@@ -1,9 +1,15 @@
 import enum
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from models import DocumentSource, ProviderType, VerificationStatus
+from models import (
+    CommunicationNeed,
+    DocumentSource,
+    MobilityDevice,
+    ProviderType,
+    VerificationStatus,
+)
 
 
 class CompetencyOut(BaseModel):
@@ -133,8 +139,57 @@ class ClaimsResponse(BaseModel):
     documents_used: int
 
 
+class SignupRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
+class UserOut(BaseModel):
+    """Public view of a user. Never includes the password hash."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    email: str
+    created_at: datetime
+
+
+class ProfileIn(BaseModel):
+    mobility_device: MobilityDevice | None = None
+    communication_needs: list[CommunicationNeed] = Field(default_factory=list)
+    required_competencies: list[str] = Field(
+        default_factory=list, description="Competency codes, e.g. ['hoist_transfer']"
+    )
+    location: str | None = Field(
+        default=None, max_length=255, description="Home city or postcode"
+    )
+
+
+class ProfileOut(ProfileIn):
+    model_config = ConfigDict(from_attributes=True)
+
+    updated_at: datetime
+
+
+class MeOut(BaseModel):
+    user: UserOut
+    profile: ProfileOut | None
+
+
 class SearchRequest(BaseModel):
     query: str = Field(min_length=1, max_length=500)
+    use_profile: bool = Field(
+        default=True, description="Apply the logged-in user's saved profile"
+    )
+    skip_profile_competencies: list[str] = Field(
+        default_factory=list,
+        description="Profile requirements to leave out of this search only",
+    )
 
 
 class SearchFilter(BaseModel):
@@ -145,10 +200,37 @@ class SearchFilter(BaseModel):
     location: str | None = None
 
 
+class RankingBreakdown(BaseModel):
+    """Why a result is ranked where it is. Each part is 0-1; see ranking.py."""
+
+    competency_match: float
+    verification_confidence: float
+    availability: float
+    distance: float
+    distance_km: float | None = Field(description="Null when either location is unknown")
+    score: float = Field(description="0.40, 0.25, 0.20 and 0.15 times the parts above")
+
+
+class RankedProvider(ProviderOut):
+    ranking: RankingBreakdown
+
+
 class SearchResponse(BaseModel):
     query: str
-    filter: SearchFilter
+    query_filter: SearchFilter = Field(
+        description="What the LLM extracted from the query. Its competencies filter results."
+    )
+    filter: SearchFilter = Field(
+        description="All requirements considered: the query's plus the profile's"
+    )
     filter_parsed: bool = Field(
         description="False if the LLM call failed and an empty filter was used"
     )
-    results: list[ProviderOut]
+    profile_applied: bool = Field(description="A saved profile was used for this search")
+    added_from_profile: list[str] = Field(
+        description="Competencies from the profile. They rank results; they don't filter them."
+    )
+    ranked_from: str | None = Field(
+        description="Location used for the distance score, or null if unknown"
+    )
+    results: list[RankedProvider] = Field(description="Sorted by ranking.score, highest first")

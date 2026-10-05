@@ -2,9 +2,12 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFi
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from auth import OptionalUser
+from auth import router as auth_router
 from database import get_db
 from documents import MAX_UPLOAD_BYTES, DocumentError, clean_text, extract_text
 from llm import parse_search_query
+from matching import apply_profile
 from models import (
     Competency,
     Document,
@@ -14,6 +17,8 @@ from models import (
     ProviderType,
 )
 from pipeline import extract, run_verification
+from places import locate
+from ranking import rank
 from schemas import (
     ClaimsResponse,
     CompetencyCheck,
@@ -30,6 +35,7 @@ from schemas import (
 from verification import cross_check, document_backed_competencies, is_verified
 
 app = FastAPI()
+app.include_router(auth_router)
 
 # Load related rows in one extra query each, instead of one query per provider.
 PROVIDER_DETAILS = (
@@ -137,17 +143,42 @@ def list_providers(
 
 
 @app.post("/search", response_model=SearchResponse)
-def search(body: SearchRequest, db: Session = Depends(get_db)):
+def search(body: SearchRequest, user: OptionalUser, db: Session = Depends(get_db)):
+    """Turn a plain-English request into filters, then find and rank providers.
+
+    - The query's provider type, location and competencies are filters.
+    - A logged-in user's saved profile (unless use_profile is false) adds
+      competencies that rank results rather than filter them, and supplies a
+      home location for the distance score when the query has none.
+    - Results are sorted by ranking.score (see ranking.py), highest first.
+    """
     competencies = {c.code: c.label for c in db.scalars(select(Competency))}
-    search_filter, parsed = parse_search_query(body.query, competencies)
-    results = find_providers(
+    query_filter, parsed = parse_search_query(body.query, competencies)
+
+    profile = user.profile if user and body.use_profile else None
+    search_filter, added = query_filter, []
+    if profile:
+        search_filter, added = apply_profile(
+            query_filter, profile, set(body.skip_profile_competencies)
+        )
+
+    candidates = find_providers(
         db,
-        search_filter.provider_type,
-        search_filter.required_competencies,
-        search_filter.location,
+        query_filter.provider_type,
+        query_filter.required_competencies,
+        query_filter.location,
     )
+    ranked_from = query_filter.location or (profile.location if profile else None)
+    results = rank(candidates, search_filter.required_competencies, locate(ranked_from))
     return SearchResponse(
-        query=body.query, filter=search_filter, filter_parsed=parsed, results=results
+        query=body.query,
+        query_filter=query_filter,
+        filter=search_filter,
+        filter_parsed=parsed,
+        profile_applied=profile is not None,
+        added_from_profile=added,
+        ranked_from=ranked_from if locate(ranked_from) else None,
+        results=results,
     )
 
 

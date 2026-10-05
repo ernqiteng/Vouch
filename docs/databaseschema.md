@@ -12,6 +12,7 @@ erDiagram
     competencies ||--o{ provider_competencies : "held by"
     providers ||--o{ documents : uploads
     providers ||--o{ verifications : "verified by"
+    users ||--o| user_profiles : has
 
     providers {
         int id PK
@@ -60,6 +61,20 @@ erDiagram
         int llm_output_tokens
         timestamp created_at
     }
+    users {
+        int id PK
+        string email UK
+        string password_hash
+        timestamp created_at
+    }
+    user_profiles {
+        int user_id PK, FK
+        mobility_device mobility_device
+        jsonb communication_needs
+        jsonb required_competencies
+        string location
+        timestamp updated_at
+    }
 ```
 
 - **providers**: the person offering the service.
@@ -67,6 +82,8 @@ erDiagram
 - **provider_competencies**: links providers to competencies (a many-to-many relationship).
 - **documents**: evidence a provider uploads, such as a certificate (Phase 2).
 - **verifications**: each verification run's confidence score and the inputs behind it (Phase 2).
+- **users**: people searching for a carer or driver, with hashed passwords (Phase 3).
+- **user_profiles**: a user's saved accessibility needs, one per user (Phase 3).
 
 ---
 
@@ -178,6 +195,34 @@ One row per verification run. Rows are never updated, so a provider's history is
 
 ---
 
+## `users`
+
+People searching for a carer or driver.
+
+| Column | Type | Constraints | Notes |
+|---|---|---|---|
+| `id` | integer | primary key, auto-increment | |
+| `email` | varchar(255) | not null, unique | Stored lowercased, so sign-up and login ignore case. |
+| `password_hash` | varchar(255) | not null | Argon2id hash. The plain password is never stored, and the hash is never returned by the API. |
+| `created_at` | timestamptz | not null, default `now()` | |
+
+## `user_profiles`
+
+A user's saved accessibility needs. One row per user (the primary key is also the foreign key).
+
+| Column | Type | Constraints | Notes |
+|---|---|---|---|
+| `user_id` | integer | primary key, foreign key → `users.id`, on delete cascade | |
+| `mobility_device` | enum `mobility_device` (`none`, `manual_wheelchair`, `powered_wheelchair`, `mobility_scooter`, `walking_aid`, `other`) | nullable | |
+| `communication_needs` | jsonb | not null | List of `bsl`, `lip_reading`, `written`, `easy_read`, `extra_time`. |
+| `required_competencies` | jsonb | not null | List of competency codes, checked against `competencies` when saved. |
+| `location` | varchar(255) | nullable | Home city or postcode, for distance ranking. |
+| `updated_at` | timestamptz | not null, default `now()` | Updated whenever the row changes. |
+
+**On delete:** deleting a user removes their profile.
+
+---
+
 ## Planned changes in later phases
 
 Not built yet. Listed so Phase 1 doesn't make choices that block them.
@@ -185,6 +230,6 @@ Not built yet. Listed so Phase 1 doesn't make choices that block them.
 | Phase | Change |
 |---|---|
 | 2 | Done: `documents` and `verifications` tables. Per-competency status lives in `verifications.checks` rather than on `provider_competencies`, so it's kept per run. |
-| 3 | Add `users` and `user_profiles` tables. Distance scoring uses `providers.latitude` / `longitude`. |
+| 3 | Done: `users` and `user_profiles` tables. Distance scoring will use `providers.latitude` / `longitude`. |
 | 4 | Add `availability` and `bookings` tables. Bookings store a JSON snapshot of verification data, not just a foreign key. |
 | 5 | Add login fields (e.g. `email`, `password_hash`) to `providers`. |
