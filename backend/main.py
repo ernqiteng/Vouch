@@ -1,4 +1,7 @@
+from datetime import UTC, datetime
+
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
+from pydantic import AwareDatetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -9,6 +12,7 @@ from documents import MAX_UPLOAD_BYTES, DocumentError, clean_text, extract_text
 from llm import parse_search_query
 from matching import apply_profile
 from models import (
+    AvailabilitySlot,
     Competency,
     Document,
     DocumentSource,
@@ -29,6 +33,8 @@ from schemas import (
     ProviderOut,
     SearchRequest,
     SearchResponse,
+    SlotIn,
+    SlotOut,
     VerificationOut,
     VerificationSummary,
 )
@@ -228,6 +234,67 @@ def upload_document(
     db.commit()
     db.refresh(document)
     return document
+
+
+@app.get(
+    "/providers/{provider_id}/availability",
+    response_model=list[SlotOut],
+    tags=["availability"],
+)
+def list_availability(
+    provider_id: int,
+    starts_from: AwareDatetime | None = Query(
+        default=None, alias="from", description="Default: now. Include a time zone."
+    ),
+    until: AwareDatetime | None = Query(default=None, description="Include a time zone."),
+    db: Session = Depends(get_db),
+):
+    """A provider's availability slots that start between `from` and `until`."""
+    _provider_or_404(provider_id, db)
+    query = (
+        select(AvailabilitySlot)
+        .where(AvailabilitySlot.provider_id == provider_id)
+        .where(AvailabilitySlot.starts_at >= (starts_from or datetime.now(UTC)))
+        .order_by(AvailabilitySlot.starts_at)
+    )
+    if until:
+        query = query.where(AvailabilitySlot.starts_at < until)
+    return db.scalars(query).all()
+
+
+@app.post(
+    "/providers/{provider_id}/availability",
+    response_model=SlotOut,
+    status_code=201,
+    tags=["availability"],
+)
+def add_availability(provider_id: int, body: SlotIn, db: Session = Depends(get_db)):
+    """Add a bookable slot. Rejected if it's in the past or overlaps an existing slot.
+
+    Open to anyone for now; Phase 5's provider dashboard restricts it to the
+    provider themselves.
+    """
+    _provider_or_404(provider_id, db)
+    if body.starts_at <= datetime.now(UTC):
+        raise HTTPException(status_code=422, detail="A slot must start in the future.")
+    overlap = db.scalar(
+        select(AvailabilitySlot).where(
+            AvailabilitySlot.provider_id == provider_id,
+            AvailabilitySlot.starts_at < body.ends_at,
+            AvailabilitySlot.ends_at > body.starts_at,
+        )
+    )
+    if overlap:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Overlaps an existing slot ({overlap.starts_at.isoformat()} to "
+            f"{overlap.ends_at.isoformat()}).",
+        )
+    slot = AvailabilitySlot(provider_id=provider_id, starts_at=body.starts_at, ends_at=body.ends_at)
+    db.add(slot)
+    db.commit()
+    db.refresh(slot)
+    return slot
 
 
 @app.get("/providers/{provider_id}/documents", response_model=list[DocumentOut])

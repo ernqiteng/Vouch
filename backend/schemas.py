@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 from models import (
     CommunicationNeed,
@@ -137,6 +137,33 @@ class ClaimsResponse(BaseModel):
         description="False if the LLM call failed and no claims could be extracted"
     )
     documents_used: int
+
+
+MAX_SLOT_HOURS = 12
+
+
+class SlotIn(BaseModel):
+    """A new availability slot. Times must include a time zone, e.g. 2026-10-06T09:00:00+01:00."""
+
+    starts_at: AwareDatetime
+    ends_at: AwareDatetime
+
+    @model_validator(mode="after")
+    def check_times(self):
+        if self.ends_at <= self.starts_at:
+            raise ValueError("ends_at must be after starts_at")
+        if (self.ends_at - self.starts_at).total_seconds() > MAX_SLOT_HOURS * 3600:
+            raise ValueError(f"A slot can be at most {MAX_SLOT_HOURS} hours long")
+        return self
+
+
+class SlotOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    provider_id: int
+    starts_at: datetime
+    ends_at: datetime
 
 
 class SignupRequest(BaseModel):
