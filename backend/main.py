@@ -7,12 +7,14 @@ from sqlalchemy.orm import Session, selectinload
 
 from auth import OptionalUser
 from auth import router as auth_router
+from bookings import router as bookings_router
 from database import get_db
 from documents import MAX_UPLOAD_BYTES, DocumentError, clean_text, extract_text
 from llm import parse_search_query
 from matching import apply_profile
 from models import (
     AvailabilitySlot,
+    Booking,
     Competency,
     Document,
     DocumentSource,
@@ -42,6 +44,7 @@ from verification import cross_check, document_backed_competencies, is_verified
 
 app = FastAPI()
 app.include_router(auth_router)
+app.include_router(bookings_router)
 
 # Load related rows in one extra query each, instead of one query per provider.
 PROVIDER_DETAILS = (
@@ -247,19 +250,33 @@ def list_availability(
         default=None, alias="from", description="Default: now. Include a time zone."
     ),
     until: AwareDatetime | None = Query(default=None, description="Include a time zone."),
+    available_only: bool = Query(default=False, description="Leave out booked slots"),
     db: Session = Depends(get_db),
 ):
-    """A provider's availability slots that start between `from` and `until`."""
+    """A provider's availability slots that start between `from` and `until`,
+    each marked `booked` if someone has already booked it."""
     _provider_or_404(provider_id, db)
     query = (
-        select(AvailabilitySlot)
+        select(AvailabilitySlot, Booking.id)
+        .outerjoin(Booking, Booking.slot_id == AvailabilitySlot.id)
         .where(AvailabilitySlot.provider_id == provider_id)
         .where(AvailabilitySlot.starts_at >= (starts_from or datetime.now(UTC)))
         .order_by(AvailabilitySlot.starts_at)
     )
     if until:
         query = query.where(AvailabilitySlot.starts_at < until)
-    return db.scalars(query).all()
+    if available_only:
+        query = query.where(Booking.id.is_(None))
+    return [
+        SlotOut(
+            id=slot.id,
+            provider_id=slot.provider_id,
+            starts_at=slot.starts_at,
+            ends_at=slot.ends_at,
+            booked=booking_id is not None,
+        )
+        for slot, booking_id in db.execute(query)
+    ]
 
 
 @app.post(
