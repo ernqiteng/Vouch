@@ -2,10 +2,12 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFi
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from auth import OptionalUser
 from auth import router as auth_router
 from database import get_db
 from documents import MAX_UPLOAD_BYTES, DocumentError, clean_text, extract_text
 from llm import parse_search_query
+from matching import apply_profile
 from models import (
     Competency,
     Document,
@@ -139,9 +141,22 @@ def list_providers(
 
 
 @app.post("/search", response_model=SearchResponse)
-def search(body: SearchRequest, db: Session = Depends(get_db)):
+def search(body: SearchRequest, user: OptionalUser, db: Session = Depends(get_db)):
+    """Turn a plain-English request into filters and find matching providers.
+
+    If the request comes from a logged-in user with a saved profile (and
+    use_profile is true), the profile's requirements are added automatically.
+    """
     competencies = {c.code: c.label for c in db.scalars(select(Competency))}
-    search_filter, parsed = parse_search_query(body.query, competencies)
+    query_filter, parsed = parse_search_query(body.query, competencies)
+
+    search_filter, added = query_filter, []
+    profile_applied = bool(user and user.profile and body.use_profile)
+    if profile_applied:
+        search_filter, added = apply_profile(
+            query_filter, user.profile, set(body.skip_profile_competencies)
+        )
+
     results = find_providers(
         db,
         search_filter.provider_type,
@@ -149,7 +164,13 @@ def search(body: SearchRequest, db: Session = Depends(get_db)):
         search_filter.location,
     )
     return SearchResponse(
-        query=body.query, filter=search_filter, filter_parsed=parsed, results=results
+        query=body.query,
+        query_filter=query_filter,
+        filter=search_filter,
+        filter_parsed=parsed,
+        profile_applied=profile_applied,
+        added_from_profile=added,
+        results=results,
     )
 
 

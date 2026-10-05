@@ -183,6 +183,13 @@ class MeOut(BaseModel):
 
 class SearchRequest(BaseModel):
     query: str = Field(min_length=1, max_length=500)
+    use_profile: bool = Field(
+        default=True, description="Apply the logged-in user's saved profile"
+    )
+    skip_profile_competencies: list[str] = Field(
+        default_factory=list,
+        description="Profile requirements to leave out of this search only",
+    )
 
 
 class SearchFilter(BaseModel):
@@ -195,8 +202,13 @@ class SearchFilter(BaseModel):
 
 class SearchResponse(BaseModel):
     query: str
-    filter: SearchFilter
+    query_filter: SearchFilter = Field(description="What the LLM extracted from the query")
+    filter: SearchFilter = Field(description="The filter actually used, profile included")
     filter_parsed: bool = Field(
         description="False if the LLM call failed and an empty filter was used"
+    )
+    profile_applied: bool = Field(description="A saved profile was merged into the filter")
+    added_from_profile: list[str] = Field(
+        description="Competency codes the profile added to this search"
     )
     results: list[ProviderOut]

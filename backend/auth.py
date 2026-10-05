@@ -32,6 +32,7 @@ password_hash = PasswordHash.recommended()  # Argon2id
 _DUMMY_HASH = password_hash.hash("dummy-password-for-timing")
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
+optional_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login", auto_error=False)
 router = APIRouter()
 
 
@@ -60,6 +61,23 @@ def get_current_user(
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+def get_optional_user(
+    token: Annotated[str | None, Depends(optional_oauth2_scheme)],
+    db: Session = Depends(get_db),
+) -> User | None:
+    """The logged-in user, or None for anonymous requests.
+
+    A token that is present but invalid or expired is still a 401, so an
+    expired session doesn't silently fall back to an anonymous search.
+    """
+    if token is None:
+        return None
+    return get_current_user(token, db)
+
+
+OptionalUser = Annotated[User | None, Depends(get_optional_user)]
 
 
 @router.post("/auth/signup", response_model=TokenResponse, status_code=201, tags=["auth"])
