@@ -1,7 +1,17 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, Float, ForeignKey, String, Text, func
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -51,6 +61,12 @@ class Provider(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
         order_by="Verification.id",
+    )
+    availability_slots: Mapped[list["AvailabilitySlot"]] = relationship(
+        back_populates="provider",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="AvailabilitySlot.starts_at",
     )
 
     @property
@@ -214,3 +230,29 @@ class UserProfile(Base):
     )
 
     user: Mapped[User] = relationship(back_populates="profile")
+
+
+class AvailabilitySlot(Base):
+    """A specific time window a provider can be booked for, e.g. Tue 09:00-12:00.
+
+    Specific slots rather than recurring weekly hours: simpler to book against
+    and enough for the demo. A slot is booked as a whole (Phase 4.2).
+    """
+
+    __tablename__ = "availability_slots"
+    __table_args__ = (
+        CheckConstraint("ends_at > starts_at", name="ck_availability_slots_ends_after_start"),
+        UniqueConstraint("provider_id", "starts_at", name="uq_availability_slots_provider_start"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    provider_id: Mapped[int] = mapped_column(
+        ForeignKey("providers.id", ondelete="CASCADE"), index=True
+    )
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    provider: Mapped[Provider] = relationship(back_populates="availability_slots")
