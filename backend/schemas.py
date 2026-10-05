@@ -200,15 +200,37 @@ class SearchFilter(BaseModel):
     location: str | None = None
 
 
+class RankingBreakdown(BaseModel):
+    """Why a result is ranked where it is. Each part is 0-1; see ranking.py."""
+
+    competency_match: float
+    verification_confidence: float
+    availability: float
+    distance: float
+    distance_km: float | None = Field(description="Null when either location is unknown")
+    score: float = Field(description="0.40, 0.25, 0.20 and 0.15 times the parts above")
+
+
+class RankedProvider(ProviderOut):
+    ranking: RankingBreakdown
+
+
 class SearchResponse(BaseModel):
     query: str
-    query_filter: SearchFilter = Field(description="What the LLM extracted from the query")
-    filter: SearchFilter = Field(description="The filter actually used, profile included")
+    query_filter: SearchFilter = Field(
+        description="What the LLM extracted from the query. Its competencies filter results."
+    )
+    filter: SearchFilter = Field(
+        description="All requirements considered: the query's plus the profile's"
+    )
     filter_parsed: bool = Field(
         description="False if the LLM call failed and an empty filter was used"
     )
-    profile_applied: bool = Field(description="A saved profile was merged into the filter")
+    profile_applied: bool = Field(description="A saved profile was used for this search")
     added_from_profile: list[str] = Field(
-        description="Competency codes the profile added to this search"
+        description="Competencies from the profile. They rank results; they don't filter them."
     )
-    results: list[ProviderOut]
+    ranked_from: str | None = Field(
+        description="Location used for the distance score, or null if unknown"
+    )
+    results: list[RankedProvider] = Field(description="Sorted by ranking.score, highest first")

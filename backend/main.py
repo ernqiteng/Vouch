@@ -17,6 +17,8 @@ from models import (
     ProviderType,
 )
 from pipeline import extract, run_verification
+from places import locate
+from ranking import rank
 from schemas import (
     ClaimsResponse,
     CompetencyCheck,
@@ -142,34 +144,40 @@ def list_providers(
 
 @app.post("/search", response_model=SearchResponse)
 def search(body: SearchRequest, user: OptionalUser, db: Session = Depends(get_db)):
-    """Turn a plain-English request into filters and find matching providers.
+    """Turn a plain-English request into filters, then find and rank providers.
 
-    If the request comes from a logged-in user with a saved profile (and
-    use_profile is true), the profile's requirements are added automatically.
+    - The query's provider type, location and competencies are filters.
+    - A logged-in user's saved profile (unless use_profile is false) adds
+      competencies that rank results rather than filter them, and supplies a
+      home location for the distance score when the query has none.
+    - Results are sorted by ranking.score (see ranking.py), highest first.
     """
     competencies = {c.code: c.label for c in db.scalars(select(Competency))}
     query_filter, parsed = parse_search_query(body.query, competencies)
 
+    profile = user.profile if user and body.use_profile else None
     search_filter, added = query_filter, []
-    profile_applied = bool(user and user.profile and body.use_profile)
-    if profile_applied:
+    if profile:
         search_filter, added = apply_profile(
-            query_filter, user.profile, set(body.skip_profile_competencies)
+            query_filter, profile, set(body.skip_profile_competencies)
         )
 
-    results = find_providers(
+    candidates = find_providers(
         db,
-        search_filter.provider_type,
-        search_filter.required_competencies,
-        search_filter.location,
+        query_filter.provider_type,
+        query_filter.required_competencies,
+        query_filter.location,
     )
+    ranked_from = query_filter.location or (profile.location if profile else None)
+    results = rank(candidates, search_filter.required_competencies, locate(ranked_from))
     return SearchResponse(
         query=body.query,
         query_filter=query_filter,
         filter=search_filter,
         filter_parsed=parsed,
-        profile_applied=profile_applied,
+        profile_applied=profile is not None,
         added_from_profile=added,
+        ranked_from=ranked_from if locate(ranked_from) else None,
         results=results,
     )
 
