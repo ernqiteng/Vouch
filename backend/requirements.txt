@@ -10,4 +10,5 @@ pypdf==6.19.0
 python-dotenv==1.2.3
 python-multipart==0.0.32
 SQLAlchemy==2.0.52
+tzdata==2026.5
 uvicorn==0.52.4
