@@ -256,3 +256,38 @@ class AvailabilitySlot(Base):
     )
 
     provider: Mapped[Provider] = relationship(back_populates="availability_slots")
+    booking: Mapped["Booking | None"] = relationship(back_populates="slot")
+
+
+class Booking(Base):
+    """A user's booking of one whole availability slot.
+
+    verification_snapshot is a copy of the provider's verification at booking
+    time, not a reference to it, so the booking keeps proof of what was
+    confirmed even if the provider's verification changes later. For the same
+    reason the booking survives the provider or slot being deleted.
+    """
+
+    __tablename__ = "bookings"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    provider_id: Mapped[int | None] = mapped_column(
+        ForeignKey("providers.id", ondelete="SET NULL"), index=True
+    )
+    # Unique: at most one booking per slot. The database's last line of
+    # defence against double-booking.
+    slot_id: Mapped[int | None] = mapped_column(
+        ForeignKey("availability_slots.id", ondelete="SET NULL"), unique=True
+    )
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    pickup: Mapped[str] = mapped_column(String(255))
+    dropoff: Mapped[str | None] = mapped_column(String(255))
+    notes: Mapped[str | None] = mapped_column(Text)
+    verification_snapshot: Mapped[dict] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    slot: Mapped[AvailabilitySlot | None] = relationship(back_populates="booking")
