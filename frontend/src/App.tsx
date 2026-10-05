@@ -286,7 +286,8 @@ interface ResultsProps {
 }
 
 function Results({ data, labels, skipped, onSkip, onRestore }: ResultsProps) {
-  const { query_filter, filter, filter_parsed, profile_applied, added_from_profile, results } = data
+  const { query_filter, filter, filter_parsed, profile_applied, added_from_profile, ranked_from, results } =
+    data
   const highlighted = new Set(filter.required_competencies)
   const label = (code: string) => labels[code] ?? code
 
@@ -319,7 +320,7 @@ function Results({ data, labels, skipped, onSkip, onRestore }: ResultsProps) {
 
       {profile_applied && (added_from_profile.length > 0 || skipped.length > 0) && (
         <div className="understood">
-          <p>From your saved needs:</p>
+          <p>Ranked by your saved needs:</p>
           <ul className="tags">
             {added_from_profile.map((code) => (
               <li key={code} className="tag tag-profile">
@@ -327,7 +328,7 @@ function Results({ data, labels, skipped, onSkip, onRestore }: ResultsProps) {
                 <button
                   type="button"
                   className="tag-remove"
-                  aria-label={`Leave out ${label(code)} for this search`}
+                  aria-label={`Don't rank by ${label(code)} for this search`}
                   onClick={() => onSkip(code)}
                 >
                   ×
@@ -350,16 +351,13 @@ function Results({ data, labels, skipped, onSkip, onRestore }: ResultsProps) {
       {results.length === 0 ? (
         <div className="state state-empty">
           <p className="state-title">No one matches all of that yet</p>
-          <p>
-            {profile_applied && added_from_profile.length > 0
-              ? 'Try leaving out one of your saved needs for this search, or a requirement or location.'
-              : 'Try leaving out one requirement or the location.'}
-          </p>
+          <p>Try leaving out one requirement or the location.</p>
         </div>
       ) : (
         <>
           <p className="count">
-            {results.length} {results.length === 1 ? 'provider' : 'providers'} found
+            {results.length} {results.length === 1 ? 'provider' : 'providers'} found, best matches first
+            {ranked_from && ` (distance measured from ${ranked_from})`}
           </p>
           <div className="legend">
             <span>
@@ -376,7 +374,12 @@ function Results({ data, labels, skipped, onSkip, onRestore }: ResultsProps) {
           </div>
           <div className="cards">
             {results.map((provider) => (
-              <ProviderCard key={provider.id} provider={provider} highlighted={highlighted} />
+              <ProviderCard
+                key={provider.id}
+                provider={provider}
+                highlighted={highlighted}
+                rankedFrom={ranked_from}
+              />
             ))}
           </div>
         </>

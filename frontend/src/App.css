@@ -548,3 +548,73 @@ button.tag-remove:hover:not(:disabled) {
   color: var(--muted);
   border-style: dashed;
 }
+
+/* Ranking */
+.match-badge {
+  font-size: 13px;
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+  background: var(--text-strong);
+  color: var(--surface);
+}
+
+.why {
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+  font-size: 14px;
+}
+
+.why summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 600;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+}
+
+.why table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 6px;
+}
+
+.why th,
+.why td {
+  text-align: left;
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.why thead th {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.why tbody th {
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.why td {
+  white-space: nowrap;
+}
+
+.why tfoot th,
+.why tfoot td {
+  font-weight: 700;
+  color: var(--text-strong);
+  border-bottom: none;
+}
+
+.why-detail {
+  display: block;
+  font-weight: 400;
+  color: var(--muted);
+  font-size: 13px;
+}

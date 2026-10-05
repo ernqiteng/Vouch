@@ -40,16 +40,35 @@ export interface SearchFilter {
   location: string | null
 }
 
+/** Why a result is ranked where it is. Each part is 0-1 (see backend/ranking.py). */
+export interface RankingBreakdown {
+  competency_match: number
+  verification_confidence: number
+  availability: number
+  distance: number
+  distance_km: number | null
+  /** 0.40, 0.25, 0.20 and 0.15 times the parts above. */
+  score: number
+}
+
+export interface RankedProvider extends Provider {
+  ranking: RankingBreakdown
+}
+
 export interface SearchResponse {
   query: string
-  /** What the LLM understood from the query alone. */
+  /** What the LLM understood from the query alone. These filter the results. */
   query_filter: SearchFilter
-  /** The filter actually used, including the saved profile. */
+  /** Everything considered: the query's requirements plus the saved profile's. */
   filter: SearchFilter
   filter_parsed: boolean
   profile_applied: boolean
+  /** Saved needs used for ranking (they don't filter). */
   added_from_profile: string[]
-  results: Provider[]
+  /** Location the distance score is measured from, or null if unknown. */
+  ranked_from: string | null
+  /** Sorted by ranking.score, highest first. */
+  results: RankedProvider[]
 }
 
 export type MobilityDevice =
