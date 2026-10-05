@@ -42,19 +42,72 @@ export interface SearchFilter {
 
 export interface SearchResponse {
   query: string
+  /** What the LLM understood from the query alone. */
+  query_filter: SearchFilter
+  /** The filter actually used, including the saved profile. */
   filter: SearchFilter
   filter_parsed: boolean
+  profile_applied: boolean
+  added_from_profile: string[]
   results: Provider[]
 }
 
+export type MobilityDevice =
+  | 'none'
+  | 'manual_wheelchair'
+  | 'powered_wheelchair'
+  | 'mobility_scooter'
+  | 'walking_aid'
+  | 'other'
+
+export type CommunicationNeed = 'bsl' | 'lip_reading' | 'written' | 'easy_read' | 'extra_time'
+
+export interface Profile {
+  mobility_device: MobilityDevice | null
+  communication_needs: CommunicationNeed[]
+  required_competencies: string[]
+  location: string | null
+}
+
+export interface Me {
+  user: { id: number; email: string; created_at: string }
+  profile: (Profile & { updated_at: string }) | null
+}
+
+/** The session is missing or expired; the user needs to log in again. */
+export class AuthError extends Error {}
+
 const API_BASE = import.meta.env.VITE_API_BASE ?? '/api'
+const TOKEN_KEY = 'vouch.token'
+
+export function getToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_KEY)
+  } catch {
+    return null
+  }
+}
+
+export function setToken(token: string | null) {
+  try {
+    if (token) localStorage.setItem(TOKEN_KEY, token)
+    else localStorage.removeItem(TOKEN_KEY)
+  } catch {
+    // Storage unavailable (e.g. private mode): stay logged in for this page only.
+  }
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getToken()
   let response: Response
   try {
     response = await fetch(`${API_BASE}${path}`, {
       ...init,
-      headers: { 'Content-Type': 'application/json', ...init?.headers },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...init?.headers,
+      },
     })
   } catch (error) {
     if (init?.signal?.aborted) throw error
@@ -67,19 +120,78 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error('Something went wrong on our side. Please try again in a moment.')
   }
   if (!response.ok) {
-    throw new Error(`The request failed (error ${response.status}). Please try again.`)
+    const detail = await errorDetail(response)
+    if (response.status === 401 && token) {
+      throw new AuthError('Your session has expired. Please log in again.')
+    }
+    throw new Error(detail ?? `The request failed (error ${response.status}). Please try again.`)
   }
   return response.json() as Promise<T>
 }
 
-export function searchProviders(query: string, signal?: AbortSignal) {
+/** The backend's human-readable message, when it sent one. */
+async function errorDetail(response: Response): Promise<string | null> {
+  try {
+    const body = await response.json()
+    if (typeof body.detail === 'string') return body.detail
+    if (Array.isArray(body.detail) && body.detail[0]?.msg) return body.detail[0].msg
+  } catch {
+    // Not JSON.
+  }
+  return null
+}
+
+interface SearchOptions {
+  useProfile?: boolean
+  skipProfileCompetencies?: string[]
+  signal?: AbortSignal
+}
+
+export function searchProviders(query: string, options: SearchOptions = {}) {
   return request<SearchResponse>('/search', {
     method: 'POST',
-    body: JSON.stringify({ query }),
-    signal,
+    body: JSON.stringify({
+      query,
+      use_profile: options.useProfile ?? true,
+      skip_profile_competencies: options.skipProfileCompetencies ?? [],
+    }),
+    signal: options.signal,
   })
 }
 
 export function listCompetencies() {
   return request<Competency[]>('/competencies')
+}
+
+export async function signUp(email: string, password: string) {
+  const { access_token } = await request<{ access_token: string }>('/auth/signup', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  })
+  setToken(access_token)
+}
+
+export async function logIn(email: string, password: string) {
+  // The login endpoint uses the standard OAuth2 form format, not JSON.
+  const { access_token } = await request<{ access_token: string }>('/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ username: email, password }),
+  })
+  setToken(access_token)
+}
+
+export function logOut() {
+  setToken(null)
+}
+
+export function getMe() {
+  return request<Me>('/me')
+}
+
+export function saveProfile(profile: Profile) {
+  return request<Me['profile']>('/me/profile', {
+    method: 'PUT',
+    body: JSON.stringify(profile),
+  })
 }
