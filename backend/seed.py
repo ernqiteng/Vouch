@@ -19,22 +19,8 @@ from models import (
     ProviderCompetency,
     ProviderType,
 )
+from places import TOWNS as CITIES
 from seed_competencies import seed_competencies
-
-CITIES = {
-    "Leeds": (53.8008, -1.5491),
-    "Manchester": (53.4808, -2.2426),
-    "London": (51.5072, -0.1276),
-    "Birmingham": (52.4862, -1.8904),
-    "Bristol": (51.4545, -2.5879),
-    "Sheffield": (53.3811, -1.4701),
-    "Liverpool": (53.4084, -2.9916),
-    "Newcastle": (54.9783, -1.6178),
-    "Nottingham": (52.9548, -1.1581),
-    "Edinburgh": (55.9533, -3.1883),
-    "Glasgow": (55.8642, -4.2518),
-    "Cardiff": (51.4816, -3.1791),
-}
 
 CARER, DRIVER = ProviderType.carer, ProviderType.driver
 
