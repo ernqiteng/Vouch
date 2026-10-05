@@ -164,6 +164,71 @@ class SlotOut(BaseModel):
     provider_id: int
     starts_at: datetime
     ends_at: datetime
+    booked: bool = False
+
+
+class BookingIn(BaseModel):
+    provider_id: int
+    requested_time: AwareDatetime = Field(
+        description="Any time inside one of the provider's slots; the whole slot is booked"
+    )
+    pickup: str = Field(min_length=1, max_length=255, description="Pickup or visit address")
+    dropoff: str | None = Field(
+        default=None, max_length=255, description="Destination. Required for drivers."
+    )
+    notes: str | None = Field(default=None, max_length=1000)
+
+
+class SnapshotProvider(BaseModel):
+    id: int
+    name: str
+    provider_type: ProviderType
+    location: str | None
+
+
+class SnapshotVerification(BaseModel):
+    verification_id: int
+    confidence: float
+    verified: bool
+    threshold: float
+    verified_at: datetime
+
+
+class SnapshotCompetency(BaseModel):
+    code: str
+    label: str
+    held: bool = Field(description="The provider lists this competency")
+    relevant: bool = Field(description="The booking user needs it (from their profile)")
+    verified: bool = Field(description="An uploaded document backed it at booking time")
+    status: VerificationStatus | None = Field(description="Cross-check result; null if never checked")
+    confidence: float | None = Field(description="The provider's verification confidence then")
+    verified_at: datetime | None
+    bio_evidence: str | None
+    document_evidence: str | None
+
+
+class VerificationSnapshot(BaseModel):
+    """A frozen copy of the provider's verification at the moment of booking."""
+
+    captured_at: datetime
+    provider: SnapshotProvider
+    verification: SnapshotVerification | None
+    competencies: list[SnapshotCompetency]
+
+
+class BookingOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    provider_id: int | None
+    slot_id: int | None
+    starts_at: datetime
+    ends_at: datetime
+    pickup: str
+    dropoff: str | None
+    notes: str | None
+    verification_snapshot: VerificationSnapshot
+    created_at: datetime
 
 
 class SignupRequest(BaseModel):
