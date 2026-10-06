@@ -4,6 +4,7 @@ from datetime import datetime
 from pydantic import AwareDatetime, BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 from models import (
+    BookingStatus,
     CommunicationNeed,
     DocumentSource,
     MobilityDevice,
@@ -228,6 +229,8 @@ class BookingOut(BaseModel):
     dropoff: str | None
     notes: str | None
     verification_snapshot: VerificationSnapshot
+    status: BookingStatus
+    cancelled_at: datetime | None
     created_at: datetime
 
 

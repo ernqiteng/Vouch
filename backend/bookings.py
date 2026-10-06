@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from auth import CurrentUser
 from database import get_db
 from matching import profile_competencies
-from models import AvailabilitySlot, Booking, Competency, Provider, ProviderType
+from models import AvailabilitySlot, Booking, BookingStatus, Competency, Provider, ProviderType
 from schemas import BookingIn, BookingOut, SnapshotProvider
 from snapshots import build_snapshot
 
@@ -104,4 +104,28 @@ def get_booking(booking_id: int, user: CurrentUser, db: Session = Depends(get_db
     booking = db.get(Booking, booking_id)
     if booking is None or booking.user_id != user.id:
         raise HTTPException(status_code=404, detail="Booking not found")
+    return booking
+
+
+@router.post("/bookings/{booking_id}/cancel", response_model=BookingOut)
+def cancel_booking(booking_id: int, user: CurrentUser, db: Session = Depends(get_db)):
+    """Cancel one of the logged-in user's bookings before it starts.
+
+    The booking and its verification snapshot are kept, marked cancelled; the
+    slot is released (slot_id cleared) so someone else can book that time.
+    """
+    booking = db.scalar(select(Booking).where(Booking.id == booking_id).with_for_update())
+    if booking is None or booking.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if booking.status is BookingStatus.cancelled:
+        raise HTTPException(status_code=409, detail="This booking is already cancelled.")
+    if booking.starts_at <= datetime.now(UTC):
+        raise HTTPException(
+            status_code=409, detail="This booking has already started, so it can't be cancelled here."
+        )
+    booking.status = BookingStatus.cancelled
+    booking.cancelled_at = datetime.now(UTC)
+    booking.slot_id = None
+    db.commit()
+    db.refresh(booking)
     return booking
