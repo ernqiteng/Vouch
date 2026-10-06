@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import type { SyntheticEvent } from 'react'
 import { AuthError, getMe, getToken, listCompetencies, logOut, searchProviders } from './api'
-import type { Competency, Me, SearchFilter, SearchResponse } from './api'
+import type { Booking, Competency, Me, Provider, SearchFilter, SearchResponse } from './api'
 import AuthForm from './AuthForm'
+import BookingConfirmation from './BookingConfirmation'
+import BookingForm from './BookingForm'
+import MyBookings from './MyBookings'
 import ProfileForm from './ProfileForm'
 import ProviderCard from './ProviderCard'
 import './App.css'
@@ -19,7 +22,7 @@ type Status =
   | { kind: 'error'; message: string }
   | { kind: 'done'; data: SearchResponse }
 
-type View = 'search' | 'login' | 'signup' | 'profile'
+type View = 'search' | 'login' | 'signup' | 'profile' | 'book' | 'booking' | 'bookings'
 
 interface SearchSettings {
   useProfile: boolean
@@ -38,6 +41,9 @@ export default function App() {
   const [view, setView] = useState<View>('search')
   const [settings, setSettings] = useState<SearchSettings>({ useProfile: true, skipped: [] })
   const [notice, setNotice] = useState<string | null>(null)
+  const [bookingProvider, setBookingProvider] = useState<Provider | null>(null)
+  const [booking, setBooking] = useState<{ data: Booking; justBooked: boolean } | null>(null)
+  const [afterLogin, setAfterLogin] = useState<View | null>(null)
   const inFlight = useRef<AbortController | null>(null)
   const labels = Object.fromEntries(competencies.map((c) => [c.code, c.label]))
 
@@ -66,6 +72,26 @@ export default function App() {
     setMe(null)
     setNotice(message)
     setView('search')
+  }
+
+  /** Session expired while doing something that needs login: log in, then carry on. */
+  function sessionExpired(returnTo: View) {
+    logOut()
+    setMe(null)
+    setNotice('Your session expired. Please log in again to carry on.')
+    setAfterLogin(returnTo)
+    setView('login')
+  }
+
+  function startBooking(provider: Provider) {
+    setBookingProvider(provider)
+    if (me) {
+      setView('book')
+    } else {
+      setNotice(`Log in or create an account to book ${provider.name}.`)
+      setAfterLogin('book')
+      setView('login')
+    }
   }
 
   async function runSearch(text: string, next: SearchSettings = settings) {
@@ -120,6 +146,9 @@ export default function App() {
             {me ? (
               <>
                 <span className="signed-in">{me.user.email}</span>
+                <button type="button" className="secondary small" onClick={() => setView('bookings')}>
+                  Your bookings
+                </button>
                 <button type="button" className="secondary small" onClick={() => setView('profile')}>
                   Your needs
                 </button>
@@ -161,12 +190,50 @@ export default function App() {
           <AuthForm
             mode={view}
             onSwitch={setView}
-            onCancel={() => setView('search')}
+            onCancel={() => {
+              setAfterLogin(null)
+              setView('search')
+            }}
             onDone={async () => {
               await refreshMe()
               setNotice(null)
-              setView('search')
+              setView(afterLogin ?? 'search')
+              setAfterLogin(null)
             }}
+          />
+        )}
+
+        {view === 'book' && me && bookingProvider && (
+          <BookingForm
+            provider={bookingProvider}
+            onBooked={(data) => {
+              setBooking({ data, justBooked: true })
+              setView('booking')
+            }}
+            onCancel={() => setView('search')}
+            onAuthError={() => sessionExpired('book')}
+          />
+        )}
+
+        {view === 'booking' && booking && (
+          <BookingConfirmation
+            booking={booking.data}
+            justBooked={booking.justBooked}
+            onBack={() => setView('search')}
+            onAllBookings={() => setView('bookings')}
+            onCancelled={(data) => setBooking({ data, justBooked: false })}
+            onAuthError={() => sessionExpired('bookings')}
+          />
+        )}
+
+        {view === 'bookings' && me && (
+          <MyBookings
+            onOpen={(data) => {
+              setBooking({ data, justBooked: false })
+              setView('booking')
+            }}
+            onBack={() => setView('search')}
+            onAuthError={() => sessionExpired('bookings')}
           />
         )}
 
@@ -267,6 +334,7 @@ export default function App() {
                   onRestore={(code) =>
                     rerun({ ...settings, skipped: settings.skipped.filter((c) => c !== code) })
                   }
+                  onBook={startBooking}
                 />
               )}
             </section>
@@ -283,9 +351,10 @@ interface ResultsProps {
   skipped: string[]
   onSkip: (code: string) => void
   onRestore: (code: string) => void
+  onBook: (provider: Provider) => void
 }
 
-function Results({ data, labels, skipped, onSkip, onRestore }: ResultsProps) {
+function Results({ data, labels, skipped, onSkip, onRestore, onBook }: ResultsProps) {
   const { query_filter, filter, filter_parsed, profile_applied, added_from_profile, ranked_from, results } =
     data
   const highlighted = new Set(filter.required_competencies)
@@ -379,6 +448,7 @@ function Results({ data, labels, skipped, onSkip, onRestore }: ResultsProps) {
                 provider={provider}
                 highlighted={highlighted}
                 rankedFrom={ranked_from}
+                onBook={() => onBook(provider)}
               />
             ))}
           </div>

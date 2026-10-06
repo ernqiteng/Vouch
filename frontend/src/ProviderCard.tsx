@@ -6,11 +6,12 @@ interface Props {
   provider: Provider & { ranking?: RankingBreakdown }
   highlighted: Set<string>
   rankedFrom?: string | null
+  onBook?: () => void
 }
 
 const percent = (value: number) => `${Math.round(value * 100)}%`
 
-export default function ProviderCard({ provider, highlighted, rankedFrom }: Props) {
+export default function ProviderCard({ provider, highlighted, rankedFrom, onBook }: Props) {
   const { verification, ranking } = provider
   const verified = verification?.verified ?? false
 
@@ -49,6 +50,13 @@ export default function ProviderCard({ provider, highlighted, rankedFrom }: Prop
       )}
 
       {ranking && <WhyThisPosition ranking={ranking} rankedFrom={rankedFrom ?? null} />}
+
+      {onBook && (
+        <button type="button" className="book-button" onClick={onBook}>
+          Book {provider.name.split(' ')[0]}
+          <span className="visually-hidden"> {provider.name.split(' ').slice(1).join(' ')}</span>
+        </button>
+      )}
     </article>
   )
 }

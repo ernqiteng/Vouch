@@ -93,6 +93,64 @@ export interface Me {
   profile: (Profile & { updated_at: string }) | null
 }
 
+export interface Slot {
+  id: number
+  provider_id: number
+  starts_at: string
+  ends_at: string
+  booked: boolean
+}
+
+export type VerificationStatus = 'corroborated' | 'self_reported' | 'documented_only'
+
+/** A frozen copy of the provider's verification at the moment of booking. */
+export interface VerificationSnapshot {
+  captured_at: string
+  provider: { id: number; name: string; provider_type: ProviderType; location: string | null }
+  verification: {
+    verification_id: number
+    confidence: number
+    verified: boolean
+    threshold: number
+    verified_at: string
+  } | null
+  competencies: {
+    code: string
+    label: string
+    held: boolean
+    relevant: boolean
+    verified: boolean
+    status: VerificationStatus | null
+    confidence: number | null
+    verified_at: string | null
+    bio_evidence: string | null
+    document_evidence: string | null
+  }[]
+}
+
+export interface Booking {
+  id: number
+  provider_id: number | null
+  slot_id: number | null
+  starts_at: string
+  ends_at: string
+  pickup: string
+  dropoff: string | null
+  notes: string | null
+  verification_snapshot: VerificationSnapshot
+  status: 'confirmed' | 'cancelled'
+  cancelled_at: string | null
+  created_at: string
+}
+
+export interface BookingRequest {
+  provider_id: number
+  requested_time: string
+  pickup: string
+  dropoff: string | null
+  notes: string | null
+}
+
 /** The session is missing or expired; the user needs to log in again. */
 export class AuthError extends Error {}
 
@@ -206,6 +264,26 @@ export function logOut() {
 
 export function getMe() {
   return request<Me>('/me')
+}
+
+export function listAvailability(providerId: number, availableOnly = true) {
+  return request<Slot[]>(`/providers/${providerId}/availability?available_only=${availableOnly}`)
+}
+
+export function createBooking(booking: BookingRequest) {
+  return request<Booking>('/bookings', { method: 'POST', body: JSON.stringify(booking) })
+}
+
+export function listBookings() {
+  return request<Booking[]>('/bookings')
+}
+
+export function getBooking(id: number) {
+  return request<Booking>(`/bookings/${id}`)
+}
+
+export function cancelBooking(id: number) {
+  return request<Booking>(`/bookings/${id}/cancel`, { method: 'POST' })
 }
 
 export function saveProfile(profile: Profile) {

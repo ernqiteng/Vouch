@@ -1,17 +1,20 @@
-"""Fill the database with fake providers and sample certificates for development.
+"""Fill the database with fake providers, sample certificates and availability.
 
 Run from backend/:
     python seed.py           # adds providers if the table is empty, plus any
-                             # missing sample certificates
+                             # missing sample certificates and availability slots
     python seed.py --reset   # deletes ALL providers first, then adds them
 """
 import sys
+from datetime import date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import delete, func, select
 
 from database import SessionLocal
 from documents import clean_text
 from models import (
+    AvailabilitySlot,
     Competency,
     Document,
     DocumentSource,
@@ -166,8 +169,45 @@ def seed(reset: bool = False) -> None:
         add_providers()
         print(f"Added {len(PROVIDERS)} providers.")
 
-    print(f"Added {seed_documents()} sample documents. "
+    print(f"Added {seed_documents()} sample documents and "
+          f"{seed_availability()} availability slots. "
           "Run `python verify_all.py` to verify the providers that have documents.")
+
+
+UK = ZoneInfo("Europe/London")
+SLOT_TIMES = [(time(9), time(12)), (time(13), time(17))]  # morning and afternoon, UK time
+SLOT_DAYS = 14
+
+
+def seed_availability(days: int = SLOT_DAYS) -> int:
+    """Give every provider morning and afternoon slots for the next `days` days.
+
+    Each provider has two days off a week (which two depends on their id), so
+    availability varies. Only missing slots are added, so running it again
+    tops slots up as time passes.
+    """
+    tomorrow = date.today() + timedelta(days=1)
+    added = 0
+    with SessionLocal() as db:
+        existing = set(db.execute(select(AvailabilitySlot.provider_id, AvailabilitySlot.starts_at)).all())
+        for provider_id in db.scalars(select(Provider.id).order_by(Provider.id)):
+            days_off = {provider_id % 7, (provider_id + 3) % 7}
+            for offset in range(days):
+                day = tomorrow + timedelta(days=offset)
+                if day.weekday() in days_off:
+                    continue
+                for start, end in SLOT_TIMES:
+                    starts_at = datetime.combine(day, start, UK)
+                    if (provider_id, starts_at) in existing:
+                        continue
+                    db.add(AvailabilitySlot(
+                        provider_id=provider_id,
+                        starts_at=starts_at,
+                        ends_at=datetime.combine(day, end, UK),
+                    ))
+                    added += 1
+        db.commit()
+    return added
 
 
 def add_providers() -> None:

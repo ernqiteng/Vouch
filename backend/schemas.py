@@ -1,9 +1,10 @@
 import enum
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 from models import (
+    BookingStatus,
     CommunicationNeed,
     DocumentSource,
     MobilityDevice,
@@ -137,6 +138,100 @@ class ClaimsResponse(BaseModel):
         description="False if the LLM call failed and no claims could be extracted"
     )
     documents_used: int
+
+
+MAX_SLOT_HOURS = 12
+
+
+class SlotIn(BaseModel):
+    """A new availability slot. Times must include a time zone, e.g. 2026-10-06T09:00:00+01:00."""
+
+    starts_at: AwareDatetime
+    ends_at: AwareDatetime
+
+    @model_validator(mode="after")
+    def check_times(self):
+        if self.ends_at <= self.starts_at:
+            raise ValueError("ends_at must be after starts_at")
+        if (self.ends_at - self.starts_at).total_seconds() > MAX_SLOT_HOURS * 3600:
+            raise ValueError(f"A slot can be at most {MAX_SLOT_HOURS} hours long")
+        return self
+
+
+class SlotOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    provider_id: int
+    starts_at: datetime
+    ends_at: datetime
+    booked: bool = False
+
+
+class BookingIn(BaseModel):
+    provider_id: int
+    requested_time: AwareDatetime = Field(
+        description="Any time inside one of the provider's slots; the whole slot is booked"
+    )
+    pickup: str = Field(min_length=1, max_length=255, description="Pickup or visit address")
+    dropoff: str | None = Field(
+        default=None, max_length=255, description="Destination. Required for drivers."
+    )
+    notes: str | None = Field(default=None, max_length=1000)
+
+
+class SnapshotProvider(BaseModel):
+    id: int
+    name: str
+    provider_type: ProviderType
+    location: str | None
+
+
+class SnapshotVerification(BaseModel):
+    verification_id: int
+    confidence: float
+    verified: bool
+    threshold: float
+    verified_at: datetime
+
+
+class SnapshotCompetency(BaseModel):
+    code: str
+    label: str
+    held: bool = Field(description="The provider lists this competency")
+    relevant: bool = Field(description="The booking user needs it (from their profile)")
+    verified: bool = Field(description="An uploaded document backed it at booking time")
+    status: VerificationStatus | None = Field(description="Cross-check result; null if never checked")
+    confidence: float | None = Field(description="The provider's verification confidence then")
+    verified_at: datetime | None
+    bio_evidence: str | None
+    document_evidence: str | None
+
+
+class VerificationSnapshot(BaseModel):
+    """A frozen copy of the provider's verification at the moment of booking."""
+
+    captured_at: datetime
+    provider: SnapshotProvider
+    verification: SnapshotVerification | None
+    competencies: list[SnapshotCompetency]
+
+
+class BookingOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    provider_id: int | None
+    slot_id: int | None
+    starts_at: datetime
+    ends_at: datetime
+    pickup: str
+    dropoff: str | None
+    notes: str | None
+    verification_snapshot: VerificationSnapshot
+    status: BookingStatus
+    cancelled_at: datetime | None
+    created_at: datetime
 
 
 class SignupRequest(BaseModel):

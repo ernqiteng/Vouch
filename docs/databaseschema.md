@@ -13,6 +13,10 @@ erDiagram
     providers ||--o{ documents : uploads
     providers ||--o{ verifications : "verified by"
     users ||--o| user_profiles : has
+    providers ||--o{ availability_slots : offers
+    users ||--o{ bookings : makes
+    providers ||--o{ bookings : "booked for"
+    availability_slots ||--o| bookings : "booked as"
 
     providers {
         int id PK
@@ -75,6 +79,28 @@ erDiagram
         string location
         timestamp updated_at
     }
+    availability_slots {
+        int id PK
+        int provider_id FK
+        timestamp starts_at
+        timestamp ends_at
+        timestamp created_at
+    }
+    bookings {
+        int id PK
+        int user_id FK
+        int provider_id FK
+        int slot_id FK, UK
+        timestamp starts_at
+        timestamp ends_at
+        string pickup
+        string dropoff
+        text notes
+        jsonb verification_snapshot
+        booking_status status
+        timestamp cancelled_at
+        timestamp created_at
+    }
 ```
 
 - **providers**: the person offering the service.
@@ -84,6 +110,8 @@ erDiagram
 - **verifications**: each verification run's confidence score and the inputs behind it (Phase 2).
 - **users**: people searching for a carer or driver, with hashed passwords (Phase 3).
 - **user_profiles**: a user's saved accessibility needs, one per user (Phase 3).
+- **availability_slots**: specific time windows a provider can be booked for (Phase 4).
+- **bookings**: a user's booking of one slot, with a frozen copy of the provider's verification (Phase 4).
 
 ---
 
@@ -221,6 +249,70 @@ A user's saved accessibility needs. One row per user (the primary key is also th
 
 **On delete:** deleting a user removes their profile.
 
+## `availability_slots`
+
+Specific time windows a provider can be booked for, e.g. Tue 7 Oct, 09:00–12:00. Chosen over recurring weekly hours because it's simpler to book against. A slot is booked as a whole.
+
+| Column | Type | Constraints | Notes |
+|---|---|---|---|
+| `id` | integer | primary key, auto-increment | |
+| `provider_id` | integer | not null, foreign key → `providers.id`, on delete cascade | |
+| `starts_at` | timestamptz | not null | Stored with its time zone. |
+| `ends_at` | timestamptz | not null | |
+| `created_at` | timestamptz | not null, default `now()` | |
+
+**Constraints:**
+- `ck_availability_slots_ends_after_start`: `ends_at > starts_at`, enforced by the database.
+- `uq_availability_slots_provider_start`: one slot per provider per start time.
+- The API also rejects slots that overlap an existing one, start in the past, or are longer than 12 hours.
+
+**Indexes:** `provider_id`.
+
+**On delete:** deleting a provider removes their slots.
+
+## `bookings`
+
+A user's booking of one whole availability slot.
+
+| Column | Type | Constraints | Notes |
+|---|---|---|---|
+| `id` | integer | primary key, auto-increment | |
+| `user_id` | integer | not null, foreign key → `users.id`, on delete cascade | Who booked. |
+| `provider_id` | integer | nullable, foreign key → `providers.id`, on delete set null | Kept as null if the provider is deleted; the snapshot still names them. |
+| `slot_id` | integer | nullable, **unique**, foreign key → `availability_slots.id`, on delete set null | Unique, so the database refuses a second booking of the same slot. |
+| `starts_at` | timestamptz | not null | Copied from the slot. |
+| `ends_at` | timestamptz | not null | Copied from the slot. |
+| `pickup` | varchar(255) | not null | Pickup or visit address. |
+| `dropoff` | varchar(255) | nullable | Destination. Required by the API for drivers. |
+| `notes` | text | nullable | |
+| `verification_snapshot` | jsonb | not null | A **copy** (not a reference) of the provider's verification at booking time; see below. |
+| `status` | enum `booking_status` (`confirmed`, `cancelled`) | not null, default `confirmed` | |
+| `cancelled_at` | timestamptz | nullable | When the user cancelled. Cancelling also clears `slot_id`, freeing the slot to be booked again, while the booking and its snapshot stay on record. |
+| `created_at` | timestamptz | not null, default `now()` | |
+
+**`verification_snapshot`** shape:
+
+```json
+{
+  "captured_at": "2026-10-05T12:00:00Z",
+  "provider": {"id": 7, "name": "Grace Mensah", "provider_type": "carer", "location": "London"},
+  "verification": {"verification_id": 42, "confidence": 0.6667, "verified": false, "threshold": 0.7, "verified_at": "..."},
+  "competencies": [
+    {"code": "hoist_transfer", "label": "Hoist transfer", "held": true, "relevant": true, "verified": true,
+     "status": "corroborated", "confidence": 0.6667, "verified_at": "...",
+     "bio_evidence": "trained in hoist transfers", "document_evidence": "including hoist transfers"}
+  ]
+}
+```
+
+`relevant` marks competencies the booking user needs (from their profile); needed competencies the provider doesn't hold are included with `held: false`. `verification` is null if the provider had never been verified.
+
+**Double-booking:** `POST /bookings` locks the slot row (`SELECT ... FOR UPDATE`) while it checks for an existing booking and creates one, and the unique `slot_id` is a database-level backstop.
+
+**Indexes:** `user_id`, `provider_id`; unique index on `slot_id`.
+
+**On delete:** deleting a user removes their bookings. Deleting a provider or slot keeps the booking (the reference becomes null).
+
 ---
 
 ## Planned changes in later phases
@@ -231,5 +323,5 @@ Not built yet. Listed so Phase 1 doesn't make choices that block them.
 |---|---|
 | 2 | Done: `documents` and `verifications` tables. Per-competency status lives in `verifications.checks` rather than on `provider_competencies`, so it's kept per run. |
 | 3 | Done: `users` and `user_profiles` tables. Distance scoring will use `providers.latitude` / `longitude`. |
-| 4 | Add `availability` and `bookings` tables. Bookings store a JSON snapshot of verification data, not just a foreign key. |
+| 4 | Done: `availability_slots` and `bookings` (with a JSON verification snapshot, not just a foreign key). |
 | 5 | Add login fields (e.g. `email`, `password_hash`) to `providers`. |
