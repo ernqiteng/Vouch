@@ -816,3 +816,49 @@ label.slot-selected {
 .booking-card button {
   align-self: flex-start;
 }
+
+/* Cancelling a booking */
+button.danger {
+  background: var(--error-text);
+  color: #fff;
+}
+
+button.danger:hover:not(:disabled) {
+  background: var(--error-text);
+  filter: brightness(0.9);
+}
+
+@media (prefers-color-scheme: dark) {
+  button.danger {
+    color: #2a0d0d;
+  }
+}
+
+button.danger-outline {
+  color: var(--error-text);
+  border-color: var(--error-text);
+}
+
+.cancel-confirm {
+  border: 2px solid var(--error-text);
+}
+
+.cancel-confirm p {
+  margin-bottom: 12px;
+}
+
+.cancelled-banner {
+  align-self: flex-start;
+  background: var(--error-bg);
+  color: var(--error-text);
+  font-weight: 700;
+  font-size: 18px;
+  border-radius: 10px;
+  padding: 10px 16px;
+}
+
+.status-cancelled {
+  align-self: flex-start;
+  background: var(--error-bg);
+  color: var(--error-text);
+}

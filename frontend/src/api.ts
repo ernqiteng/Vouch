@@ -138,6 +138,8 @@ export interface Booking {
   dropoff: string | null
   notes: string | null
   verification_snapshot: VerificationSnapshot
+  status: 'confirmed' | 'cancelled'
+  cancelled_at: string | null
   created_at: string
 }
 
@@ -278,6 +280,10 @@ export function listBookings() {
 
 export function getBooking(id: number) {
   return request<Booking>(`/bookings/${id}`)
+}
+
+export function cancelBooking(id: number) {
+  return request<Booking>(`/bookings/${id}/cancel`, { method: 'POST' })
 }
 
 export function saveProfile(profile: Profile) {

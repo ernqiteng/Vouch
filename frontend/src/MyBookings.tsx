@@ -65,6 +65,7 @@ export default function MyBookings({ onOpen, onBack, onAuthError }: Props) {
                   {b.pickup}
                   {b.dropoff && ` → ${b.dropoff}`}
                 </p>
+                {b.status === 'cancelled' && <span className="status-badge status-cancelled">Cancelled</span>}
                 <p className="card-evidence">
                   {snapshot.verification?.verified ? '✓ Verified when booked' : 'Not verified when booked'}
                 </p>

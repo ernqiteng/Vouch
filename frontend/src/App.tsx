@@ -221,6 +221,8 @@ export default function App() {
             justBooked={booking.justBooked}
             onBack={() => setView('search')}
             onAllBookings={() => setView('bookings')}
+            onCancelled={(data) => setBooking({ data, justBooked: false })}
+            onAuthError={() => sessionExpired('bookings')}
           />
         )}
 

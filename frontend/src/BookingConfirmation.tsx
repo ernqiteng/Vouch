@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { AuthError, cancelBooking } from './api'
 import type { Booking, VerificationSnapshot } from './api'
 import { formatDayWithYear, formatStamp, formatTimeRange, percent } from './format'
 
@@ -9,23 +10,59 @@ interface Props {
   justBooked: boolean
   onBack: () => void
   onAllBookings: () => void
+  onCancelled: (booking: Booking) => void
+  onAuthError: (error: AuthError) => void
 }
 
-export default function BookingConfirmation({ booking, justBooked, onBack, onAllBookings }: Props) {
+export default function BookingConfirmation({
+  booking,
+  justBooked,
+  onBack,
+  onAllBookings,
+  onCancelled,
+  onAuthError,
+}: Props) {
   const snapshot = booking.verification_snapshot
   const { provider, verification } = snapshot
   const heading = useRef<HTMLHeadingElement>(null)
   const needed = snapshot.competencies.filter((c) => c.relevant)
   const others = snapshot.competencies.filter((c) => !c.relevant)
+  const cancelled = booking.status === 'cancelled'
+  // Read the clock once when the screen opens; the server enforces the rule anyway.
+  const [openedAt] = useState(() => Date.now())
+  const canCancel = !cancelled && new Date(booking.starts_at).getTime() > openedAt
+  const [confirming, setConfirming] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
+  const [cancelError, setCancelError] = useState<string | null>(null)
 
-  useEffect(() => heading.current?.focus(), [booking.id])
+  useEffect(() => heading.current?.focus(), [booking.id, cancelled])
+
+  async function handleCancel() {
+    setCancelling(true)
+    setCancelError(null)
+    try {
+      onCancelled(await cancelBooking(booking.id))
+      setConfirming(false)
+    } catch (e) {
+      if (e instanceof AuthError) return onAuthError(e)
+      setCancelError((e as Error).message)
+    } finally {
+      setCancelling(false)
+    }
+  }
 
   return (
     <article className="confirmation" aria-labelledby="confirmation-heading">
-      {justBooked && (
-        <p className="confirmed-banner" role="status">
-          ✓ Booking confirmed
+      {cancelled ? (
+        <p className="cancelled-banner" role="status">
+          This booking was cancelled{booking.cancelled_at && ` on ${formatStamp(booking.cancelled_at)}`}.
         </p>
+      ) : (
+        justBooked && (
+          <p className="confirmed-banner" role="status">
+            ✓ Booking confirmed
+          </p>
+        )
       )}
       <h2 id="confirmation-heading" ref={heading} tabIndex={-1}>
         Your booking with {provider.name}
@@ -34,6 +71,8 @@ export default function BookingConfirmation({ booking, justBooked, onBack, onAll
       <section className="panel panel-wide" aria-labelledby="trip-heading">
         <h3 id="trip-heading">Trip details</h3>
         <dl className="details">
+          <dt>Status</dt>
+          <dd>{cancelled ? 'Cancelled' : 'Confirmed'}</dd>
           <dt>When</dt>
           <dd>
             {formatDayWithYear(booking.starts_at)}, {formatTimeRange(booking.starts_at, booking.ends_at)}
@@ -93,6 +132,30 @@ export default function BookingConfirmation({ booking, justBooked, onBack, onAll
         )}
       </section>
 
+      {confirming && (
+        <section className="panel panel-wide cancel-confirm" aria-labelledby="cancel-heading">
+          <h3 id="cancel-heading">Cancel this booking?</h3>
+          <p>
+            Your booking with {provider.name} on {formatDayWithYear(booking.starts_at)},{' '}
+            {formatTimeRange(booking.starts_at, booking.ends_at)} will be cancelled and the time freed for someone
+            else. The record of what was verified is kept.
+          </p>
+          {cancelError && (
+            <p className="form-error" role="alert">
+              {cancelError}
+            </p>
+          )}
+          <div className="actions">
+            <button type="button" className="danger" onClick={handleCancel} disabled={cancelling}>
+              {cancelling ? 'Cancelling…' : 'Yes, cancel booking'}
+            </button>
+            <button type="button" className="secondary" onClick={() => setConfirming(false)} disabled={cancelling}>
+              Keep booking
+            </button>
+          </div>
+        </section>
+      )}
+
       <div className="actions">
         <button type="button" onClick={onAllBookings}>
           All my bookings
@@ -100,6 +163,11 @@ export default function BookingConfirmation({ booking, justBooked, onBack, onAll
         <button type="button" className="secondary" onClick={onBack}>
           Back to search
         </button>
+        {canCancel && !confirming && (
+          <button type="button" className="secondary danger-outline" onClick={() => setConfirming(true)}>
+            Cancel booking
+          </button>
+        )}
       </div>
     </article>
   )
