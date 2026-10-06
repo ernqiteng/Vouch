@@ -97,6 +97,8 @@ erDiagram
         string dropoff
         text notes
         jsonb verification_snapshot
+        booking_status status
+        timestamp cancelled_at
         timestamp created_at
     }
 ```
@@ -284,6 +286,8 @@ A user's booking of one whole availability slot.
 | `dropoff` | varchar(255) | nullable | Destination. Required by the API for drivers. |
 | `notes` | text | nullable | |
 | `verification_snapshot` | jsonb | not null | A **copy** (not a reference) of the provider's verification at booking time; see below. |
+| `status` | enum `booking_status` (`confirmed`, `cancelled`) | not null, default `confirmed` | |
+| `cancelled_at` | timestamptz | nullable | When the user cancelled. Cancelling also clears `slot_id`, freeing the slot to be booked again, while the booking and its snapshot stay on record. |
 | `created_at` | timestamptz | not null, default `now()` | |
 
 **`verification_snapshot`** shape:
