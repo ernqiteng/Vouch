@@ -1,4 +1,4 @@
-# Vouch
+# Vouch - An Accessibility Services Matching Platform
 
 A verification-first directory that matches disabled users with accessibility-competent carers and transport providers, and lets them book a specific trip against a specific verified match.
 
