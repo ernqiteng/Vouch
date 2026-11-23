@@ -2,7 +2,7 @@
 
     score = competency_match                 * 0.40
           + verification_confidence          * 0.25
-          + availability_at_requested_time   * 0.20
+          + availability                     * 0.20
           + eta_or_distance                  * 0.15
 
 Each term is its own function returning 0-1, so each can be tested and
@@ -25,6 +25,11 @@ MAX_SEARCH_RADIUS_KM = 100.0
 # distance doesn't change the order.
 NEUTRAL_DISTANCE_SCORE = 0.5
 
+# Availability looks at the next AVAILABILITY_WINDOW_DAYS days. A provider with
+# FULL_AVAILABILITY_SLOTS or more free slots in that window scores 1.0.
+AVAILABILITY_WINDOW_DAYS = 7
+FULL_AVAILABILITY_SLOTS = 5
+
 Coords = tuple[float, float]
 
 
@@ -43,12 +48,15 @@ def verification_confidence(confidence: float | None) -> float:
     return min(max(confidence, 0.0), 1.0)
 
 
-def availability_at_requested_time(provider: ProviderOut) -> float:
-    """1 if the provider is free at the requested time, 0 if not.
+def availability(free_slots: int | None) -> float:
+    """How bookable a provider is: free slots in the window / FULL_AVAILABILITY_SLOTS, max 1.
 
-    Stub until Phase 4 adds availability: everyone counts as available.
+    None means availability wasn't looked up, so everyone counts as available
+    and it doesn't change the order.
     """
-    return 1.0
+    if free_slots is None:
+        return 1.0
+    return min(max(free_slots, 0), FULL_AVAILABILITY_SLOTS) / FULL_AVAILABILITY_SLOTS
 
 
 def distance_km(a: Coords, b: Coords) -> float:
@@ -81,7 +89,10 @@ def score(competency: float, verification: float, availability: float, distance:
 
 
 def breakdown(
-    provider: ProviderOut, required: list[str], user_coords: Coords | None
+    provider: ProviderOut,
+    required: list[str],
+    user_coords: Coords | None,
+    free_slots: int | None = None,
 ) -> RankingBreakdown:
     provider_coords = (
         (provider.latitude, provider.longitude)
@@ -93,7 +104,7 @@ def breakdown(
         "verification_confidence": verification_confidence(
             provider.verification.confidence if provider.verification else None
         ),
-        "availability": availability_at_requested_time(provider),
+        "availability": availability(free_slots),
         "distance": eta_or_distance(provider_coords, user_coords),
     }
     return RankingBreakdown(
@@ -106,14 +117,22 @@ def breakdown(
 
 
 def rank(
-    providers: list[ProviderOut], required: list[str], user_coords: Coords | None
+    providers: list[ProviderOut],
+    required: list[str],
+    user_coords: Coords | None,
+    free_slots: dict[int, int] | None = None,
 ) -> list[RankedProvider]:
     """Score every provider and sort by score, highest first.
+
+    free_slots maps provider id -> free slots in the next AVAILABILITY_WINDOW_DAYS
+    days (missing ids count as 0). Leave it out to ignore availability.
 
     Ties keep the database order (by id), so results are stable.
     """
     ranked = [
-        RankedProvider(**p.model_dump(), ranking=breakdown(p, required, user_coords))
+        RankedProvider(**p.model_dump(), ranking=breakdown(
+            p, required, user_coords, None if free_slots is None else free_slots.get(p.id, 0)
+        ))
         for p in providers
     ]
     return sorted(ranked, key=lambda p: p.ranking.score, reverse=True)
