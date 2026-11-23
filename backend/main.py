@@ -1,8 +1,8 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
 from pydantic import AwareDatetime
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from auth import OptionalUser
@@ -24,7 +24,7 @@ from models import (
 )
 from pipeline import extract, run_verification
 from places import locate
-from ranking import rank
+from ranking import AVAILABILITY_WINDOW_DAYS, rank
 from schemas import (
     ClaimsResponse,
     CompetencyCheck,
@@ -139,6 +139,23 @@ def find_providers(
     return [to_provider_out(p) for p in db.scalars(query)]
 
 
+def free_slot_counts(db: Session, provider_ids: list[int]) -> dict[int, int]:
+    """Unbooked slots per provider in the availability window, in one query."""
+    now = datetime.now(UTC)
+    rows = db.execute(
+        select(AvailabilitySlot.provider_id, func.count())
+        .outerjoin(Booking, Booking.slot_id == AvailabilitySlot.id)
+        .where(
+            AvailabilitySlot.provider_id.in_(provider_ids),
+            AvailabilitySlot.starts_at > now,
+            AvailabilitySlot.starts_at < now + timedelta(days=AVAILABILITY_WINDOW_DAYS),
+            Booking.id.is_(None),
+        )
+        .group_by(AvailabilitySlot.provider_id)
+    )
+    return dict(rows.all())
+
+
 @app.get("/providers", response_model=list[ProviderOut])
 def list_providers(
     competency: list[str] = Query(
@@ -178,7 +195,12 @@ def search(body: SearchRequest, user: OptionalUser, db: Session = Depends(get_db
         query_filter.location,
     )
     ranked_from = query_filter.location or (profile.location if profile else None)
-    results = rank(candidates, search_filter.required_competencies, locate(ranked_from))
+    results = rank(
+        candidates,
+        search_filter.required_competencies,
+        locate(ranked_from),
+        free_slot_counts(db, [p.id for p in candidates]),
+    )
     return SearchResponse(
         query=body.query,
         query_filter=query_filter,

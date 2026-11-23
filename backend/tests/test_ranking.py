@@ -9,7 +9,7 @@ from models import ProviderType
 from places import TOWNS, locate
 from ranking import (
     WEIGHTS,
-    availability_at_requested_time,
+    availability,
     competency_match,
     distance_km,
     eta_or_distance,
@@ -68,8 +68,28 @@ def test_verification_confidence_uses_the_score_or_zero():
     assert verification_confidence(1.4) == 1.0
 
 
-def test_availability_is_stubbed_as_available_until_phase_4():
-    assert availability_at_requested_time(provider(1, "A")) == 1.0
+def test_availability_scales_with_free_slots_up_to_the_cap():
+    assert availability(0) == 0.0
+    assert availability(1) == pytest.approx(0.2)
+    assert availability(5) == 1.0
+    assert availability(40) == 1.0
+
+
+def test_availability_is_ignored_when_not_looked_up():
+    assert availability(None) == 1.0
+
+
+def test_free_slots_change_the_ranking():
+    providers = [provider(1, "busy", confidence=1.0), provider(2, "free", confidence=1.0)]
+    assert [r.name for r in rank(providers, [], None)] == ["busy", "free"]
+    results = rank(providers, [], None, free_slots={1: 0, 2: 5})
+    assert [r.name for r in results] == ["free", "busy"]
+    assert [r.ranking.availability for r in results] == [1.0, 0.0]
+
+
+def test_provider_missing_from_free_slots_counts_as_fully_booked():
+    [r] = rank([provider(1, "A")], [], None, free_slots={})
+    assert r.ranking.availability == 0.0
 
 
 def test_distance_km_is_roughly_right():
