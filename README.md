@@ -67,7 +67,7 @@ Results aren't just filtered — they're ranked by a scoring function:
 score =
     competency_match * 0.40
   + verification_confidence * 0.25
-  + availability_at_requested_time * 0.20
+  + availability_next_7_days * 0.20
   + eta_or_distance * 0.15
 ```
 
@@ -76,12 +76,20 @@ Users request a named provider for a specific pickup, dropoff, and time. Vouch c
 
 ## Tech stack
 
-- **Frontend:** React + TypeScript
-- **Backend:** Python + FastAPI
-- **Database:** PostgreSQL — this is a relational, entity-and-trust problem (providers, users, verification records, structured tags, trips, availability), not a spatial one, so plain Postgres is the right fit
-- **LLM:** Claude or Gemini API, used narrowly for two tasks: (1) parsing natural-language user requests into structured requirements, and (2) extracting structured competency claims from provider bios, reviews, and uploaded certification text
-- **Distance/ETA:** a single external geocoding/distance API call (e.g. Google Distance Matrix or Mapbox) for trip ETA and distance display — Vouch does not build its own routing engine; that's a solved problem elsewhere and isn't the point of this project
-- **Optional:** basic OCR (e.g. Tesseract) if parsing certificate images rather than text uploads
+- **Frontend:** React 19 + TypeScript, built with Vite. In development, Vite proxies `/api` to the backend, so no CORS setup is needed.
+- **Backend:** Python + FastAPI (served by Uvicorn), with Pydantic v2 for request/response validation.
+- **Database:** PostgreSQL, accessed through SQLAlchemy 2.0 (psycopg2 driver), with schema changes managed by Alembic migrations. This is a relational, entity-and-trust problem (providers, users, verification records, structured tags, bookings, availability), not a spatial one, so plain Postgres is the right fit. It also uses JSONB for verification evidence and booking snapshots, native enums, and database constraints (a unique `slot_id` plus row locking to prevent double-booking).
+- **LLM:** the Google Gemini API (`google-genai`), used narrowly for two tasks: (1) parsing natural-language user requests into a structured search filter, and (2) extracting structured competency claims from provider bios and uploaded certification text. Requests fall back through a list of Gemini models when one is overloaded or rate-limited.
+- **Auth:** Argon2id password hashing (`pwdlib`) and JWT login tokens (`PyJWT`).
+- **Documents:** `pypdf` extracts text from uploaded text-based PDFs. Pasted text and `.txt` files are also supported.
+- **Distance:** an offline lookup of UK town coordinates (`backend/places.py`) plus a haversine great-circle calculation. There is no external geocoding or routing API, so postcodes and towns not in the list aren't recognised for distance ranking.
+- **Testing:** pytest unit tests, plus an eval script that measures claim-extraction precision and recall against a hand-labelled set.
+
+### Not used (yet)
+
+- No OCR, so scanned certificates (image-only PDFs) are rejected with a message asking for the text to be pasted.
+- No external geocoding or distance API.
+- No Docker, Redis, CI/CD or cloud deployment. The app is run locally.
 
 ## Running locally
 
